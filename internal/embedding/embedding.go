@@ -24,8 +24,16 @@ type Embedder interface {
 // model download, while the interface permits a GGUF-backed model later.
 type Projection struct{}
 
-func (Projection) ID() string      { return "builtin-semantic-projection-en-v1" }
+func (Projection) ID() string      { return "builtin-semantic-projection-en-v2" }
 func (Projection) Dimensions() int { return dimensions }
+
+var conceptNamespaces = [...]string{
+	"concept:",
+	"meaning:",
+	"topic:",
+	"intent:",
+	"semantic:",
+}
 
 func (Projection) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if texts == nil {
@@ -47,7 +55,19 @@ func project(text string) []float32 {
 	for i, token := range tokens {
 		add(v, "word:"+token, 1)
 		concept := canonical(token)
-		add(v, "concept:"+concept, 1.7)
+		_, knownConcept := concepts[token]
+		if knownConcept || concept != token {
+			// A single signed hash can collide with and cancel an otherwise
+			// relevant concept. Project recognized synonyms and stems through
+			// several independent namespaces so one collision cannot erase the
+			// semantic signal. Ordinary words retain one concept feature so
+			// boilerplate does not gain disproportionate weight.
+			for _, namespace := range conceptNamespaces {
+				add(v, namespace+concept, 1.7)
+			}
+		} else {
+			add(v, "concept:"+concept, 1.7)
+		}
 		if i > 0 {
 			add(v, "pair:"+canonical(tokens[i-1])+"_"+concept, .35)
 		}

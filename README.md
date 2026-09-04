@@ -55,6 +55,8 @@ Use `--db PATH` before the command, or set `DOCDEX_DB`. The default is `docdex.d
 
 V1 indexes UTF-8 text, Markdown, and PDFs with an extractable text layer. It does not perform OCR. The compact built-in semantic model is English-oriented and intentionally replaceable through the `embedding.Embedder` interface.
 
+Embedding model identities are stored with the index. If an upgrade changes the projection algorithm, `docdex` rejects the older vectors instead of mixing incompatible embeddings. Rebuild into a new database, or remove the old database and run `init`, `add`, and `index` again.
+
 ## Verification
 
 For a human-readable walkthrough that creates its own temporary documents and exercises the CLI and MCP:

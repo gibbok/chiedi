@@ -26,6 +26,45 @@ func TestProjectionSemanticSimilarity(t *testing.T) {
 	}
 }
 
+func TestProjectionConceptFeaturesResistSignedHashCollisions(t *testing.T) {
+	tests := []struct {
+		name       string
+		question   string
+		relevant   string
+		distractor string
+	}{
+		{name: "secure", question: "What does secure mean here?", relevant: "safe", distractor: "choose"},
+		{name: "change", question: "What does change mean here?", relevant: "modify", distractor: "home"},
+		{name: "display", question: "What does display mean here?", relevant: "show", distractor: "fix"},
+	}
+
+	embedder := Projection{}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			vectors, err := embedder.Embed(context.Background(), []string{
+				test.question,
+				"Document: relevant.txt\nSection:\n\n" + test.relevant,
+				"Document: distractor.txt\nSection:\n\n" + test.distractor,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			relevant, err := Cosine(vectors[0], vectors[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			distractor, err := Cosine(vectors[0], vectors[2])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if relevant <= 0 || relevant <= distractor {
+				t.Fatalf("relevant similarity=%f must be positive and outrank distractor=%f", relevant, distractor)
+			}
+		})
+	}
+}
+
 func TestCosineRejectsNonFiniteValues(t *testing.T){
 	for _,value:=range []float32{float32(math.NaN()),float32(math.Inf(1)),float32(math.Inf(-1))}{if _,err:=Cosine([]float32{value,1},[]float32{1,1});err==nil{t.Fatalf("accepted non-finite value %v",value)}}
 }
