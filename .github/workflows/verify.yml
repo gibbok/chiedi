@@ -18,8 +18,8 @@ jobs:
         with:
           go-version: '1.23.x'
           cache: true
-      - name: Resolve dependency checksums
+      - name: Verify dependency metadata
         run: |
           go mod tidy
-          cat go.sum
+          git diff --exit-code go.mod go.sum || { cat go.mod; exit 1; }
       - run: make verify-full
