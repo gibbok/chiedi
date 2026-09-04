@@ -31,6 +31,7 @@ type Root struct {
 type Document struct {
 	ID           int64  `json:"id"`
 	RootID       int64  `json:"root_id"`
+	RootPath     string `json:"root_path"`
 	RelativePath string `json:"path"`
 	Identity     string `json:"file_identity,omitempty"`
 	Size         int64  `json:"size_bytes"`
@@ -44,6 +45,8 @@ type Document struct {
 type Chunk struct {
 	ID            int64     `json:"chunk_id"`
 	DocumentID    int64     `json:"document_id"`
+	RootID        int64     `json:"root_id"`
+	RootPath      string    `json:"root_path"`
 	Ordinal       int       `json:"ordinal"`
 	Path          string    `json:"path"`
 	Heading       string    `json:"heading,omitempty"`
@@ -205,7 +208,7 @@ func (s *Store) Roots(ctx context.Context) ([]Root, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id,path FROM roots ORDER BY path`)
 	if err != nil { return nil, err }
 	defer rows.Close()
-	var out []Root
+	out := make([]Root,0)
 	for rows.Next() {
 		var r Root
 		if err := rows.Scan(&r.ID, &r.Path); err != nil { return nil, err }
@@ -215,27 +218,27 @@ func (s *Store) Roots(ctx context.Context) ([]Root, error) {
 }
 
 func (s *Store) DocumentsByRoot(ctx context.Context, rootID int64) ([]Document, error) {
-	return s.documents(ctx, `WHERE root_id=?`, rootID)
+	return s.documents(ctx, `WHERE d.root_id=?`, rootID)
 }
 
 func (s *Store) ListDocuments(ctx context.Context, prefix, extension, status string) ([]Document, error) {
 	clauses := []string{"1=1"}
 	args := []any{}
-	if prefix != "" { clauses = append(clauses, "relative_path LIKE ?"); args = append(args, prefix+"%") }
-	if extension != "" { clauses = append(clauses, "format=?"); args = append(args, strings.TrimPrefix(strings.ToLower(extension), ".")) }
-	if status != "" { clauses = append(clauses, "status=?"); args = append(args, status) }
+	if prefix != "" { clauses = append(clauses, `instr(d.relative_path,?)=1`); args = append(args, normalizedPrefix(prefix)) }
+	if extension != "" { clauses = append(clauses, "d.format=?"); args = append(args, strings.TrimPrefix(strings.ToLower(extension), ".")) }
+	if status != "" { clauses = append(clauses, "d.status=?"); args = append(args, status) }
 	return s.documents(ctx, "WHERE "+strings.Join(clauses, " AND "), args...)
 }
 
 func (s *Store) documents(ctx context.Context, where string, args ...any) ([]Document, error) {
-	q := `SELECT id,root_id,relative_path,COALESCE(file_identity,''),size_bytes,mtime_ns,content_hash,format,status,COALESCE(error,'') FROM documents `+where+` ORDER BY relative_path`
+	q := `SELECT d.id,d.root_id,r.path,d.relative_path,COALESCE(d.file_identity,''),d.size_bytes,d.mtime_ns,d.content_hash,d.format,d.status,COALESCE(d.error,'') FROM documents d JOIN roots r ON r.id=d.root_id `+where+` ORDER BY r.path,d.relative_path`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil { return nil, err }
 	defer rows.Close()
-	var out []Document
+	out := make([]Document,0)
 	for rows.Next() {
 		var d Document
-		if err := rows.Scan(&d.ID,&d.RootID,&d.RelativePath,&d.Identity,&d.Size,&d.MtimeNS,&d.ContentHash,&d.Format,&d.Status,&d.Error); err != nil { return nil, err }
+		if err := rows.Scan(&d.ID,&d.RootID,&d.RootPath,&d.RelativePath,&d.Identity,&d.Size,&d.MtimeNS,&d.ContentHash,&d.Format,&d.Status,&d.Error); err != nil { return nil, err }
 		out = append(out,d)
 	}
 	return out, rows.Err()
@@ -247,20 +250,20 @@ func (s *Store) ChunksForDocument(ctx context.Context, documentID int64) ([]Chun
 
 func (s *Store) AllChunks(ctx context.Context, pathPrefix string) ([]Chunk, error) {
 	where, args := "", []any{}
-	if pathPrefix != "" { where = `WHERE d.relative_path LIKE ?`; args = append(args, pathPrefix+"%") }
+	if pathPrefix != "" { where = `WHERE instr(d.relative_path,?)=1`; args = append(args, normalizedPrefix(pathPrefix)) }
 	return s.queryChunks(ctx, where+` ORDER BY c.id`, args...)
 }
 
 func (s *Store) queryChunks(ctx context.Context, suffix string, args ...any) ([]Chunk, error) {
-	q := `SELECT c.id,c.document_id,c.ordinal,d.relative_path,COALESCE(c.heading,''),COALESCE(c.page_start,0),COALESCE(c.page_end,0),c.text,c.embedding_hash,c.embedding FROM chunks c JOIN documents d ON d.id=c.document_id `+suffix
+	q := `SELECT c.id,c.document_id,d.root_id,r.path,c.ordinal,d.relative_path,COALESCE(c.heading,''),COALESCE(c.page_start,0),COALESCE(c.page_end,0),c.text,c.embedding_hash,c.embedding FROM chunks c JOIN documents d ON d.id=c.document_id JOIN roots r ON r.id=d.root_id `+suffix
 	rows, err := s.db.QueryContext(ctx,q,args...)
 	if err != nil { return nil,err }
 	defer rows.Close()
-	var out []Chunk
+	out := make([]Chunk,0)
 	for rows.Next() {
 		var c Chunk
 		var vector []byte
-		if err := rows.Scan(&c.ID,&c.DocumentID,&c.Ordinal,&c.Path,&c.Heading,&c.PageStart,&c.PageEnd,&c.Text,&c.EmbeddingHash,&vector); err != nil { return nil,err }
+		if err := rows.Scan(&c.ID,&c.DocumentID,&c.RootID,&c.RootPath,&c.Ordinal,&c.Path,&c.Heading,&c.PageStart,&c.PageEnd,&c.Text,&c.EmbeddingHash,&vector); err != nil { return nil,err }
 		c.Vector = decodeVector(vector)
 		out = append(out,c)
 	}
@@ -298,15 +301,17 @@ func (s *Store) ReplaceDocument(ctx context.Context, replacement Replacement) (i
 
 func nullInt(v int) any { if v==0{return nil};return v }
 
-func (s *Store) RenameDocument(ctx context.Context, id int64, relativePath string, size, mtime int64) error {
+func (s *Store) RenameDocument(ctx context.Context, id int64, relativePath, identity string, size, mtime int64) error {
 	tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
-	if _,err:=tx.ExecContext(ctx,`UPDATE documents SET relative_path=?,size_bytes=?,mtime_ns=? WHERE id=?`,relativePath,size,mtime,id);err!=nil{return err}
+	if _,err:=tx.ExecContext(ctx,`UPDATE documents SET relative_path=?,file_identity=?,size_bytes=?,mtime_ns=? WHERE id=?`,relativePath,identity,size,mtime,id);err!=nil{return err}
 	rows,err:=tx.QueryContext(ctx,`SELECT id,text,COALESCE(heading,'') FROM chunks WHERE document_id=?`,id);if err!=nil{return err}
 	type row struct{id int64;text,heading string};var data []row
 	for rows.Next(){var r row;if err:=rows.Scan(&r.id,&r.text,&r.heading);err!=nil{rows.Close();return err};data=append(data,r)};rows.Close()
 	for _,r:=range data{if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,r.id);err!=nil{return err};if _,err:=tx.ExecContext(ctx,`INSERT INTO chunks_fts(rowid,text,heading,path) VALUES(?,?,?,?)`,r.id,r.text,r.heading,relativePath);err!=nil{return err}}
 	return tx.Commit()
 }
+
+func (s *Store) UpdateDocumentMetadata(ctx context.Context,id int64,identity string,size,mtime int64)error{_,err:=s.db.ExecContext(ctx,`UPDATE documents SET file_identity=?,size_bytes=?,mtime_ns=? WHERE id=?`,identity,size,mtime,id);return err}
 
 func (s *Store) DeleteDocument(ctx context.Context,id int64) error {
 	tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
@@ -318,18 +323,18 @@ func (s *Store) DeleteDocument(ctx context.Context,id int64) error {
 }
 
 func (s *Store) SearchFTS(ctx context.Context, query, pathPrefix string, limit int) ([]int64,error) {
-	if strings.TrimSpace(query)=="" { return nil,nil }
+	if strings.TrimSpace(query)=="" { return []int64{},nil }
 	q:=`SELECT f.rowid FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.document_id WHERE chunks_fts MATCH ?`
 	args:=[]any{query}
-	if pathPrefix!=""{q+=` AND d.relative_path LIKE ?`;args=append(args,pathPrefix+"%")}
+	if pathPrefix!=""{q+=` AND instr(d.relative_path,?)=1`;args=append(args,normalizedPrefix(pathPrefix))}
 	q+=` ORDER BY bm25(chunks_fts) LIMIT ?`;args=append(args,limit)
-	rows,err:=s.db.QueryContext(ctx,q,args...);if err!=nil{return nil,err};defer rows.Close();var ids []int64
+	rows,err:=s.db.QueryContext(ctx,q,args...);if err!=nil{return nil,err};defer rows.Close();ids:=make([]int64,0)
 	for rows.Next(){var id int64;if err:=rows.Scan(&id);err!=nil{return nil,err};ids=append(ids,id)}
 	return ids,rows.Err()
 }
 
 func (s *Store) ReadChunks(ctx context.Context, ids []int64, before, after int) ([]Chunk,error) {
-	seen:=map[int64]bool{};var out []Chunk
+	seen:=map[int64]bool{};out:=make([]Chunk,0)
 	for _,id:=range ids{
 		var docID int64;var ordinal int
 		if err:=s.db.QueryRowContext(ctx,`SELECT document_id,ordinal FROM chunks WHERE id=?`,id).Scan(&docID,&ordinal);err!=nil{if errors.Is(err,sql.ErrNoRows){continue};return nil,err}
@@ -349,6 +354,22 @@ func (s *Store) Counts(ctx context.Context)(Counts,error){
 func (s *Store) SetMeta(ctx context.Context,key,value string)error{_,err:=s.db.ExecContext(ctx,`INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,key,value);return err}
 func (s *Store) Meta(ctx context.Context,key string)(string,error){var v string;err:=s.db.QueryRowContext(ctx,`SELECT value FROM meta WHERE key=?`,key).Scan(&v);if errors.Is(err,sql.ErrNoRows){return "",nil};return v,err}
 func (s *Store) IntegrityCheck(ctx context.Context) error { var result string; if err:=s.db.QueryRowContext(ctx,`PRAGMA integrity_check`).Scan(&result);err!=nil{return err};if result!="ok"{return fmt.Errorf("SQLite integrity check: %s",result)};return nil }
+func (s *Store) IndexIntegrityCheck(ctx context.Context,dimensions int)error{
+	if dimensions<=0{return fmt.Errorf("index integrity: embedding dimensions must be positive")}
+	checks:=[]struct{name,query string;args []any}{
+		{"chunks missing FTS rows",`SELECT count(*) FROM chunks c LEFT JOIN chunks_fts f ON f.rowid=c.id WHERE f.rowid IS NULL`,nil},
+		{"orphaned FTS rows",`SELECT count(*) FROM chunks_fts f LEFT JOIN chunks c ON c.id=f.rowid WHERE c.id IS NULL`,nil},
+		{"FTS rows inconsistent with chunks",`SELECT count(*) FROM chunks c JOIN documents d ON d.id=c.document_id JOIN chunks_fts f ON f.rowid=c.id WHERE f.text<>c.text OR COALESCE(f.heading,'')<>COALESCE(c.heading,'') OR f.path<>d.relative_path`,nil},
+		{"invalid embedding hashes",`SELECT count(*) FROM chunks WHERE length(embedding_hash)<>32`,nil},
+		{"invalid vector blobs",`SELECT count(*) FROM chunks WHERE length(embedding)<>?`,[]any{dimensions*4}},
+	}
+	for _,check:=range checks{var count int;if err:=s.db.QueryRowContext(ctx,check.query,check.args...).Scan(&count);err!=nil{return err};if count!=0{return fmt.Errorf("index integrity: %d %s",count,check.name)}}
+	rows,err:=s.db.QueryContext(ctx,`SELECT id,embedding FROM chunks`);if err!=nil{return err};defer rows.Close()
+	for rows.Next(){var id int64;var raw []byte;if err:=rows.Scan(&id,&raw);err!=nil{return err};for _,x:=range decodeVector(raw){if math.IsNaN(float64(x))||math.IsInf(float64(x),0){return fmt.Errorf("index integrity: chunk %d has a non-finite vector value",id)}}}
+	return rows.Err()
+}
+
+func normalizedPrefix(prefix string)string{return strings.ReplaceAll(prefix,`\`,`/`)}
 
 func encodeVector(v []float32)[]byte{b:=make([]byte,len(v)*4);for i,x:=range v{binary.LittleEndian.PutUint32(b[i*4:],math.Float32bits(x))};return b}
 func decodeVector(b []byte)[]float32{v:=make([]float32,len(b)/4);for i:=range v{v[i]=math.Float32frombits(binary.LittleEndian.Uint32(b[i*4:]))};return v}

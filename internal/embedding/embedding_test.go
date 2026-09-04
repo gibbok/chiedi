@@ -2,6 +2,7 @@ package embedding
 
 import (
 	"context"
+	"math"
 	"testing"
 )
 
@@ -23,6 +24,14 @@ func TestProjectionSemanticSimilarity(t *testing.T) {
 	if len(vs[0]) != e.Dimensions() {
 		t.Fatalf("got %d dimensions", len(vs[0]))
 	}
+}
+
+func TestCosineRejectsNonFiniteValues(t *testing.T){
+	for _,value:=range []float32{float32(math.NaN()),float32(math.Inf(1)),float32(math.Inf(-1))}{if _,err:=Cosine([]float32{value,1},[]float32{1,1});err==nil{t.Fatalf("accepted non-finite value %v",value)}}
+}
+
+func TestCosineHandlesLargeFiniteValues(t *testing.T){
+	value:=float32(math.MaxFloat32);similarity,err:=Cosine([]float32{value,value},[]float32{value,value});if err!=nil{t.Fatal(err)};if math.Abs(similarity-1)>1e-12{t.Fatalf("similarity=%v",similarity)}
 }
 
 func TestProjectionCancellation(t *testing.T) {

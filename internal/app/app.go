@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -33,13 +34,13 @@ func Run(ctx context.Context,args []string,stdin io.Reader,stdout,stderr io.Writ
 	case "add":if len(rest)!=2{return fail(errors.New("usage: docdex add <directory>"))};if err:=s.AddRoot(ctx,rest[1]);err!=nil{return fail(err)};fmt.Fprintln(stdout,"added",rest[1]);return 0
 	case "remove":if len(rest)!=2{return fail(errors.New("usage: docdex remove <directory>"))};if err:=s.RemoveRoot(ctx,rest[1]);err!=nil{return fail(err)};fmt.Fprintln(stdout,"removed",rest[1]);return 0
 	case "roots":roots,err:=s.Roots(ctx);if err!=nil{return fail(err)};return printJSON(stdout,roots,stderr)
-	case "index","reconcile":stats,err:=idx.Reconcile(ctx);_ = printJSON(stdout,stats,stderr);if err!=nil{return fail(err)};return 0
+	case "index","reconcile":stats,err:=idx.Reconcile(ctx);outputCode:=printJSON(stdout,stats,stderr);if err!=nil{return fail(err)};return outputCode
 	case "status":status,err:=mcp.Status(ctx,s);if err!=nil{return fail(err)};return printJSON(stdout,status,stderr)
-	case "doctor":if err:=s.IntegrityCheck(ctx);err!=nil{return fail(err)};if err:=idx.ValidateCompatibility(ctx);err!=nil{return fail(err)};fmt.Fprintf(stdout,"ok: SQLite schema %d, model %s (%d dimensions), offline\n",store.SchemaVersion,embedder.ID(),embedder.Dimensions());return 0
+	case "doctor":if err:=s.IntegrityCheck(ctx);err!=nil{return fail(err)};if err:=idx.ValidateCompatibility(ctx);err!=nil{return fail(err)};if err:=s.IndexIntegrityCheck(ctx,embedder.Dimensions());err!=nil{return fail(err)};fmt.Fprintf(stdout,"ok: SQLite schema %d, model %s (%d dimensions), offline\n",store.SchemaVersion,embedder.ID(),embedder.Dimensions());return 0
 	case "search":
 		search:=flag.NewFlagSet("search",flag.ContinueOnError);search.SetOutput(stderr);limit:=search.Int("limit",10,"maximum results");prefix:=search.String("path-prefix","","relative path prefix");if err:=search.Parse(rest[1:]);err!=nil{return 2};question:=strings.Join(search.Args()," ");if question==""{return fail(errors.New("usage: docdex search [--limit N] <question>"))}
 		if _,err:=idx.Reconcile(ctx);err!=nil{return fail(fmt.Errorf("reconcile index: %w",err))}
-		results,err:=ret.Retrieve(ctx,question,*prefix,*limit);if err!=nil{return fail(err)};for _,r:=range results{location:=r.Path;if r.Heading!=""{location+=" — "+r.Heading};if r.PageStart>0{location+=" — page "+strconv.Itoa(r.PageStart)};fmt.Fprintf(stdout,"[%d] %s\n%s\n\n",r.Rank,location,r.Text)};return 0
+		results,err:=ret.Retrieve(ctx,question,*prefix,*limit);if err!=nil{return fail(err)};for _,r:=range results{location:=r.Path;if r.RootPath!=""{location=filepath.Join(r.RootPath,filepath.FromSlash(r.Path))};if r.Heading!=""{location+=" — "+r.Heading};if r.PageStart>0{location+=" — page "+strconv.Itoa(r.PageStart)};fmt.Fprintf(stdout,"[%d] %s\n%s\n\n",r.Rank,location,r.Text)};return 0
 	case "mcp":server:=mcp.Server{Store:s,Indexer:idx,Retriever:ret};if err:=server.Serve(ctx,stdin,stdout);err!=nil&&!errors.Is(err,context.Canceled){return fail(err)};return 0
 	}
 	return 2

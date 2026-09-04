@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -62,7 +63,7 @@ func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 	case "ping":return map[string]any{},nil
 	case "tools/list":return map[string]any{"tools":toolDefinitions()},nil
 	case "tools/call":
-		var call struct{Name string `json:"name"`;Arguments json.RawMessage `json:"arguments"`};if err:=json.Unmarshal(req.Params,&call);err!=nil{return nil,&rpcError{-32602,"invalid tool parameters"}}
+		var call struct{Name string `json:"name"`;Arguments json.RawMessage `json:"arguments"`};if err:=decodeArgs(req.Params,&call);err!=nil||call.Name==""{return nil,&rpcError{-32602,"invalid tool parameters"}}
 		value,err:=s.call(ctx,call.Name,call.Arguments);if err!=nil{return map[string]any{"content":[]any{map[string]any{"type":"text","text":err.Error()}},"isError":true},nil}
 		encoded,_:=json.Marshal(value);return map[string]any{"content":[]any{map[string]any{"type":"text","text":string(encoded)}},"structuredContent":value,"isError":false},nil
 	default:return nil,&rpcError{-32601,"method not found"}
@@ -70,31 +71,31 @@ func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 }
 
 func (s Server) call(ctx context.Context,name string,args json.RawMessage)(any,error){
-	if _,err:=s.Indexer.Reconcile(ctx);err!=nil{return nil,fmt.Errorf("reconcile index: %w",err)}
+	reconcile:=func()error{if _,err:=s.Indexer.Reconcile(ctx);err!=nil{return fmt.Errorf("reconcile index: %w",err)};return nil}
 	switch name{
 	case "retrieve":
-		var a struct{Question string `json:"question"`;Limit int `json:"limit"`;PathPrefix string `json:"path_prefix"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};return s.Retriever.Retrieve(ctx,a.Question,a.PathPrefix,a.Limit)
+		var a struct{Question string `json:"question"`;Limit int `json:"limit"`;PathPrefix string `json:"path_prefix"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if strings.TrimSpace(a.Question)==""{return nil,fmt.Errorf("question is required")};if a.Limit<0||a.Limit>50{return nil,fmt.Errorf("limit must be between 1 and 50, or 0 for the default")};if err:=reconcile();err!=nil{return nil,err};return s.Retriever.Retrieve(ctx,a.Question,a.PathPrefix,a.Limit)
 	case "read_chunks":
-		var a struct{ChunkIDs []int64 `json:"chunk_ids"`;Before int `json:"before"`;After int `json:"after"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if len(a.ChunkIDs)==0{return nil,fmt.Errorf("chunk_ids is required")};if a.Before<0||a.After<0||a.Before>5||a.After>5{return nil,fmt.Errorf("before/after must be between 0 and 5")};return s.Store.ReadChunks(ctx,a.ChunkIDs,a.Before,a.After)
+		var a struct{ChunkIDs []int64 `json:"chunk_ids"`;Before int `json:"before"`;After int `json:"after"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if len(a.ChunkIDs)==0{return nil,fmt.Errorf("chunk_ids is required")};if len(a.ChunkIDs)>100{return nil,fmt.Errorf("chunk_ids may contain at most 100 IDs")};for _,id:=range a.ChunkIDs{if id<=0{return nil,fmt.Errorf("chunk_ids must contain only positive IDs")}};if a.Before<0||a.After<0||a.Before>5||a.After>5{return nil,fmt.Errorf("before/after must be between 0 and 5")};if err:=reconcile();err!=nil{return nil,err};return s.Store.ReadChunks(ctx,a.ChunkIDs,a.Before,a.After)
 	case "list_documents":
-		var a struct{PathPrefix string `json:"path_prefix"`;Extension string `json:"extension"`;Status string `json:"status"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};return s.Store.ListDocuments(ctx,a.PathPrefix,a.Extension,a.Status)
-	case "index_status":return Status(ctx,s.Store)
+		var a struct{PathPrefix string `json:"path_prefix"`;Extension string `json:"extension"`;Status string `json:"status"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if a.Status!=""&&a.Status!="indexed"&&a.Status!="failed"{return nil,fmt.Errorf("status must be indexed or failed")};if err:=reconcile();err!=nil{return nil,err};return s.Store.ListDocuments(ctx,a.PathPrefix,a.Extension,a.Status)
+	case "index_status":var a struct{};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if err:=reconcile();err!=nil{return nil,err};return Status(ctx,s.Store)
 	default:return nil,fmt.Errorf("unknown tool %q",name)
 	}
 }
 
-func decodeArgs(raw json.RawMessage,dst any)error{if len(raw)==0{return nil};dec:=json.NewDecoder(strings.NewReader(string(raw)));dec.DisallowUnknownFields();return dec.Decode(dst)}
+func decodeArgs(raw json.RawMessage,dst any)error{trimmed:=bytes.TrimSpace(raw);if len(trimmed)==0{return nil};if bytes.Equal(trimmed,[]byte("null")){return fmt.Errorf("arguments must be an object")};dec:=json.NewDecoder(bytes.NewReader(trimmed));dec.DisallowUnknownFields();if err:=dec.Decode(dst);err!=nil{return err};var trailing any;if err:=dec.Decode(&trailing);err!=io.EOF{return fmt.Errorf("arguments must contain exactly one JSON object")};return nil}
 
 func Status(ctx context.Context,s *store.Store)(map[string]any,error){
 	counts,err:=s.Counts(ctx);if err!=nil{return nil,err};last,err:=s.Meta(ctx,"last_reconciliation");if err!=nil{return nil,err};model,err:=s.Meta(ctx,"embedding_model_id");if err!=nil{return nil,err};dimensionsText,err:=s.Meta(ctx,"embedding_dimensions");if err!=nil{return nil,err};dimensions:=0;if dimensionsText!=""{dimensions,err=strconv.Atoi(dimensionsText);if err!=nil{return nil,fmt.Errorf("invalid stored embedding dimensions %q",dimensionsText)}}
 	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts}
-	if last!=""{var parsed any;if json.Unmarshal([]byte(last),&parsed)==nil{result["last_reconciliation"]=parsed}}
+	if last!=""{var parsed any;if err:=json.Unmarshal([]byte(last),&parsed);err!=nil{return nil,fmt.Errorf("invalid stored reconciliation status: %w",err)};result["last_reconciliation"]=parsed}
 	return result,nil
 }
 
 func toolDefinitions()[]map[string]any{return []map[string]any{
-	{"name":"retrieve","description":"Retrieve semantically and lexically relevant document evidence.","inputSchema":map[string]any{"type":"object","required":[]string{"question"},"properties":map[string]any{"question":map[string]any{"type":"string"},"limit":map[string]any{"type":"integer","minimum":1,"maximum":50},"path_prefix":map[string]any{"type":"string"}}}},
-	{"name":"read_chunks","description":"Read chunks and bounded neighboring context.","inputSchema":map[string]any{"type":"object","required":[]string{"chunk_ids"},"properties":map[string]any{"chunk_ids":map[string]any{"type":"array","items":map[string]any{"type":"integer"}},"before":map[string]any{"type":"integer","minimum":0,"maximum":5},"after":map[string]any{"type":"integer","minimum":0,"maximum":5}}}},
-	{"name":"list_documents","description":"List indexed documents.","inputSchema":map[string]any{"type":"object","properties":map[string]any{"path_prefix":map[string]any{"type":"string"},"extension":map[string]any{"type":"string"},"status":map[string]any{"type":"string"}}}},
-	{"name":"index_status","description":"Inspect index state and last reconciliation work.","inputSchema":map[string]any{"type":"object","properties":map[string]any{}}},
+	{"name":"retrieve","description":"Retrieve semantically and lexically relevant document evidence.","inputSchema":map[string]any{"type":"object","additionalProperties":false,"required":[]string{"question"},"properties":map[string]any{"question":map[string]any{"type":"string","minLength":1},"limit":map[string]any{"type":"integer","minimum":1,"maximum":50},"path_prefix":map[string]any{"type":"string"}}}},
+	{"name":"read_chunks","description":"Read chunks and bounded neighboring context.","inputSchema":map[string]any{"type":"object","additionalProperties":false,"required":[]string{"chunk_ids"},"properties":map[string]any{"chunk_ids":map[string]any{"type":"array","minItems":1,"maxItems":100,"items":map[string]any{"type":"integer","minimum":1}},"before":map[string]any{"type":"integer","minimum":0,"maximum":5},"after":map[string]any{"type":"integer","minimum":0,"maximum":5}}}},
+	{"name":"list_documents","description":"List indexed documents.","inputSchema":map[string]any{"type":"object","additionalProperties":false,"properties":map[string]any{"path_prefix":map[string]any{"type":"string"},"extension":map[string]any{"type":"string"},"status":map[string]any{"type":"string","enum":[]string{"indexed","failed"}}}}},
+	{"name":"index_status","description":"Inspect index state and last reconciliation work.","inputSchema":map[string]any{"type":"object","additionalProperties":false,"properties":map[string]any{}}},
 }}

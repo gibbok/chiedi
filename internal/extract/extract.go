@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,7 +56,7 @@ func File(ctx context.Context, path string) (Document, error) {
 }
 
 func textFile(path string) (Document, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFileBounded(path,MaxFileBytes)
 	if err != nil {
 		return Document{}, err
 	}
@@ -67,7 +68,7 @@ func textFile(path string) (Document, error) {
 }
 
 func markdownFile(path string) (Document, error) {
-	b, err := os.ReadFile(path)
+	b, err := readFileBounded(path,MaxFileBytes)
 	if err != nil {
 		return Document{}, err
 	}
@@ -120,6 +121,10 @@ func markdownFile(path string) (Document, error) {
 	}
 	flush()
 	return Document{Title: title, Sections: sections}, nil
+}
+
+func readFileBounded(path string,limit int64)([]byte,error){
+	file,err:=os.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil
 }
 
 func markdownHeading(line string) (int, string) {

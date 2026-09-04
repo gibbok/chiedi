@@ -41,3 +41,7 @@ func TestInvalidUTF8(t *testing.T) {
 		t.Fatal("expected invalid UTF-8 error")
 	}
 }
+
+func TestBoundedReadRejectsOversizedData(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"growing.txt");if err:=os.WriteFile(path,[]byte("12345"),0o600);err!=nil{t.Fatal(err)};if _,err:=readFileBounded(path,4);err==nil||!strings.Contains(err.Error(),"exceeds"){t.Fatalf("got %v",err)}
+}

@@ -27,7 +27,7 @@ func TestBuiltBinaryCommonUseCase(t *testing.T){
 	db:=filepath.Join(dir,"docdex.db");run:=func(args ...string)string{t.Helper();all:=append([]string{"--db",db},args...);c:=exec.Command(binary,all...);out,err:=c.CombinedOutput();if err!=nil{t.Fatalf("%v: %v\n%s",args,err,out)};return string(out)}
 	run("init");run("add",corpus);indexOut:=run("index");if !strings.Contains(indexOut,`"embedding_jobs": 4`){t.Fatalf("unexpected initial index:\n%s",indexOut)}
 	status:=run("status");if !strings.Contains(status,`"indexed_count": 4`)||strings.Contains(status,"ignored.bin"){t.Fatalf("unexpected status:\n%s",status)}
-	semantic:=run("search","How many vacation days do workers get?");if !strings.Contains(strings.SplitN(semantic,"\n\n",2)[0],"hr.md")||!strings.Contains(semantic,"twenty business days"){t.Fatalf("semantic miss:\n%s",semantic)}
+	semantic:=run("search","How many vacation days do workers get?");if !strings.Contains(strings.SplitN(semantic,"\n\n",2)[0],filepath.Join(corpus,"hr.md"))||!strings.Contains(semantic,"twenty business days"){t.Fatalf("semantic miss or source provenance missing:\n%s",semantic)}
 	exact:=run("search","DB-ZX-481");if !strings.Contains(strings.SplitN(exact,"\n\n",2)[0],"technical.txt"){t.Fatalf("exact miss:\n%s",exact)}
 	contract:=run("search","Can the contractor terminate the contract ahead of time?");if !strings.Contains(contract,"contract.pdf"){t.Fatalf("PDF semantic miss:\n%s",contract)}
 	testMCP(t,binary,db)
@@ -53,7 +53,7 @@ func testMCP(t *testing.T,binary,db string){
 	for _,line:=range requests{fmt.Fprintln(stdin,line)};stdin.Close();scanner:=bufio.NewScanner(stdout);var responses []map[string]any;for scanner.Scan(){var response map[string]any;if err:=json.Unmarshal(scanner.Bytes(),&response);err!=nil{t.Fatalf("MCP stdout is not JSON: %q",scanner.Text())};responses=append(responses,response)}
 	if err:=cmd.Wait();err!=nil{t.Fatalf("MCP exit: %v stderr=%s",err,stderr.String())};if len(responses)!=len(requests){t.Fatalf("MCP responses=%d want=%d stderr=%s",len(responses),len(requests),stderr.String())}
 	for n,response:=range responses{if response["error"]!=nil{t.Fatalf("MCP response %d: %+v",n,response)}}
-	encoded,_:=json.Marshal(responses);text:=string(encoded);for _,required:=range []string{"retrieve","read_chunks","list_documents","index_status","hr.md"}{if !strings.Contains(text,required){t.Fatalf("MCP output missing %q: %s",required,text)}}
+	encoded,_:=json.Marshal(responses);text:=string(encoded);for _,required:=range []string{"retrieve","read_chunks","list_documents","index_status","hr.md","root_path","root_id"}{if !strings.Contains(text,required){t.Fatalf("MCP output missing %q: %s",required,text)}}
 }
 
 func write(t *testing.T,path,content string){t.Helper();if err:=os.WriteFile(path,[]byte(content),0o600);err!=nil{t.Fatal(err)}}

@@ -29,6 +29,8 @@ MCP tools:
 - `list_documents`: inspect indexed sources
 - `index_status`: inspect roots, counts, failures, and last incremental work
 
+Document and chunk results include both `root_id`/`root_path` and the path relative to that root. This keeps sources unambiguous when two configured directories contain the same relative filename. CLI search results print the resolved source path.
+
 Every retrieval reconciles configured roots first, so edits, renames, moves, additions, and deletions become visible even if operating-system notifications were missed. An unchanged reconciliation performs no extraction or embedding work.
 
 ## Commands
@@ -67,6 +69,6 @@ For the complete automated gate:
 make test-all
 ```
 
-The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`.
+The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`. Unit regressions also cover literal path filters, empty JSON collections, multi-root provenance, malformed/non-finite vectors, stale FTS rows, strict MCP arguments, and bounded file reads.
 
 Run `make help` to see individual targets. See [Testing docdex](docs/testing.md) for expected behavior, preserved demo files, focused commands, and failure interpretation.

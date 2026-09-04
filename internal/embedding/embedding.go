@@ -115,9 +115,13 @@ func Cosine(a, b []float32) (float64, error) {
 	}
 	var dot, aa, bb float64
 	for i := range a {
-		dot += float64(a[i] * b[i])
-		aa += float64(a[i] * a[i])
-		bb += float64(b[i] * b[i])
+		x, y := float64(a[i]), float64(b[i])
+		if math.IsNaN(x)||math.IsInf(x,0)||math.IsNaN(y)||math.IsInf(y,0){
+			return 0, errors.New("vectors must contain only finite values")
+		}
+		dot += x * y
+		aa += x * x
+		bb += y * y
 	}
 	if aa == 0 || bb == 0 {
 		return 0, nil

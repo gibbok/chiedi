@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,6 +18,8 @@ type incompatibleEmbedder struct{embedding.Projection}
 func (incompatibleEmbedder) ID()string{return "different-model"}
 type invalidOutputEmbedder struct{embedding.Projection}
 func (invalidOutputEmbedder) Embed(context.Context,[]string)([][]float32,error){return [][]float32{},nil}
+type nonFiniteOutputEmbedder struct{embedding.Projection}
+func (nonFiniteOutputEmbedder) Embed(_ context.Context,texts []string)([][]float32,error){out:=make([][]float32,len(texts));for n:=range out{out[n]=make([]float32,(embedding.Projection{}).Dimensions());out[n][0]=float32(math.NaN())};return out,nil}
 
 func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();db:=filepath.Join(t.TempDir(),"index.db")
@@ -54,6 +57,19 @@ func TestRejectsInvalidEmbeddingOutput(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();writeAt(t,filepath.Join(root,"doc.txt"),"semantic content",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
 	if _,err:=(Indexer{Store:s,Embedder:invalidOutputEmbedder{}}).Reconcile(ctx);err==nil{t.Fatal("expected invalid embedding output error")}
 	counts,err:=s.Counts(ctx);if err!=nil{t.Fatal(err)};if counts.Documents!=0||counts.Chunks!=0{t.Fatalf("partial index was persisted: %+v",counts)}
+}
+
+func TestRejectsNonFiniteEmbeddingOutput(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();writeAt(t,filepath.Join(root,"doc.txt"),"semantic content",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
+	if _,err:=(Indexer{Store:s,Embedder:nonFiniteOutputEmbedder{}}).Reconcile(ctx);err==nil{t.Fatal("expected non-finite embedding output error")}
+	counts,err:=s.Counts(ctx);if err!=nil{t.Fatal(err)};if counts.Documents!=0||counts.Chunks!=0{t.Fatalf("partial index was persisted: %+v",counts)}
+}
+
+func TestContentEquivalentReplacementRefreshesFileMetadata(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();path:=filepath.Join(root,"doc.txt");initialTime:=time.Now().Add(-4*time.Second);writeAt(t,path,"unchanged semantic content",initialTime)
+	s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};i:=Indexer{Store:s,Embedder:embedding.Projection{}};if _,err:=i.Reconcile(ctx);err!=nil{t.Fatal(err)};roots,err:=s.Roots(ctx);if err!=nil{t.Fatal(err)};before,err:=s.DocumentsByRoot(ctx,roots[0].ID);if err!=nil||len(before)!=1{t.Fatalf("before=%+v err=%v",before,err)}
+	replacement:=filepath.Join(root,"replacement.tmp");replacementTime:=time.Now();writeAt(t,replacement,"unchanged semantic content",replacementTime);if err:=os.Remove(path);err!=nil{t.Fatal(err)};if err:=os.Rename(replacement,path);err!=nil{t.Fatal(err)};current,err:=os.Stat(path);if err!=nil{t.Fatal(err)}
+	stats,err:=i.Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.ExtractionJobs!=0||stats.EmbeddingJobs!=0{t.Fatalf("content-equivalent replacement did unnecessary work: %+v",stats)};after,err:=s.DocumentsByRoot(ctx,roots[0].ID);if err!=nil||len(after)!=1{t.Fatalf("after=%+v err=%v",after,err)};if after[0].MtimeNS!=current.ModTime().UnixNano(){t.Fatalf("mtime was not refreshed: got %d want %d",after[0].MtimeNS,current.ModTime().UnixNano())};if before[0].Identity!=""&&after[0].Identity!=""&&before[0].Identity==after[0].Identity{t.Fatalf("file identity was not refreshed: %q",after[0].Identity)}
 }
 
 func writeAt(t *testing.T,path,content string,mtime time.Time){t.Helper();if err:=os.WriteFile(path,[]byte(content),0o600);err!=nil{t.Fatal(err)};if err:=os.Chtimes(path,mtime,mtime);err!=nil{t.Fatal(err)}}
