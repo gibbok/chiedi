@@ -69,6 +69,6 @@ For the complete automated gate:
 make test-all
 ```
 
-The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`. Unit regressions also cover literal path filters, empty JSON collections, multi-root provenance, malformed/non-finite vectors, stale FTS rows, strict MCP arguments, and bounded file reads.
+The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, concurrent processes, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`. Unit regressions also cover transactional rollback, filesystem failures, symlink containment, literal path filters, empty JSON collections, multi-root provenance, malformed/non-finite vectors, stale FTS rows, strict MCP arguments, bounded file reads, and a 50-case retrieval-quality gate.
 
 Run `make help` to see individual targets. See [Testing docdex](docs/testing.md) for expected behavior, preserved demo files, focused commands, and failure interpretation.

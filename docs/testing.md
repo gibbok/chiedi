@@ -83,7 +83,9 @@ This executes the following checks sequentially:
 
 `make verify` and `make verify-full` remain aliases for `make test-all` so CI and older local workflows use the same gate.
 
-The unit layer includes edge-case regressions for empty databases, owner-only database permissions, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only and same-timestamp file replacement, cross-format rename, chunk overlap, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
+The unit layer includes edge-case regressions for empty databases, owner-only database permissions, transactional rollback and restart recovery, concurrent SQLite writers, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only and same-timestamp file replacement, cross-format rename, unavailable roots, incomplete permission-constrained scans, symlink containment, cancellation during embedding, chunk overlap, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
+
+Retrieval also has a 50-case quality gate: 40 synonym/paraphrase cases that cannot be satisfied by exact lexical matching and 10 exact-identifier cases. Every expected source must rank first.
 
 ## End-to-end acceptance test
 
@@ -127,6 +129,18 @@ export DOCDEX_DB="$PWD/manual-test.db"
 ./bin/docdex search "your question"
 ./bin/docdex doctor
 ```
+
+## Codex host smoke test
+
+The automated E2E test launches the production MCP binary, completes initialization, sends the initialized notification, pings it, discovers tools, and calls every tool over stdio. A final host-level check requires a locally authenticated Codex installation and therefore is intentionally manual:
+
+1. configure Codex to launch `/absolute/path/bin/docdex mcp` with `DOCDEX_DB` set to the tested database;
+2. restart or refresh MCP connections in Codex;
+3. confirm the `retrieve`, `read_chunks`, `list_documents`, and `index_status` tools are visible;
+4. ask Codex to retrieve a known exact identifier and a semantic paraphrase from the corpus;
+5. confirm its answer cites the returned root, relative path, heading, or PDF page as applicable.
+
+No API token or per-token OpenAI API configuration is required for `docdex`; it communicates with the authenticated Codex host over local stdio.
 
 Remove `manual-test.db`, `manual-test.db-shm`, and `manual-test.db-wal` when the experiment is no longer needed.
 

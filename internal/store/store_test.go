@@ -4,12 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestLifecycleFTSAndDelete(t *testing.T){
@@ -75,6 +78,19 @@ func TestIndexIntegrityDetectsSemanticIndexCorruption(t *testing.T){
 	if _,err:=s.db.ExecContext(ctx,`UPDATE chunks SET embedding=? WHERE id=?`,encodeVector([]float32{float32(math.NaN()),1}),id);err!=nil{t.Fatal(err)};assertIntegrityError(t,s,ctx,2,"non-finite")
 	if _,err:=s.db.ExecContext(ctx,`UPDATE chunks SET embedding=? WHERE id=?`,encodeVector([]float32{1,0}),id);err!=nil{t.Fatal(err)}
 	if _,err:=s.db.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,id);err!=nil{t.Fatal(err)};if _,err:=s.db.ExecContext(ctx,`INSERT INTO chunks_fts(rowid,text,heading,path) VALUES(?,?,?,?)`,id,"body","Heading","wrong.md");err!=nil{t.Fatal(err)};assertIntegrityError(t,s,ctx,2,"inconsistent")
+}
+
+func TestReplacementFailureRollsBackDocumentFTSAndVectors(t *testing.T){
+	ctx:=context.Background();path:=filepath.Join(t.TempDir(),"rollback.db");s,err:=Open(ctx,path);if err!=nil{t.Fatal(err)};root:=t.TempDir();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};roots,err:=s.Roots(ctx);if err!=nil{t.Fatal(err)};replacement:=Replacement{RootID:roots[0].ID,RelativePath:"doc.txt",Size:3,MtimeNS:1,ContentHash:[]byte("old"),Format:"txt",Status:"indexed",Chunks:[]Chunk{{Ordinal:0,Text:"durable old evidence",EmbeddingHash:make([]byte,32),Vector:[]float32{1,0}}}};documentID,err:=s.ReplaceDocument(ctx,replacement);if err!=nil{t.Fatal(err)}
+	broken:=Replacement{RootID:roots[0].ID,RelativePath:"doc.txt",Size:3,MtimeNS:2,ContentHash:[]byte("new"),Format:"txt",Status:"indexed",Chunks:[]Chunk{{Ordinal:0,Text:"partial replacement",EmbeddingHash:make([]byte,32),Vector:[]float32{0,1}},{Ordinal:0,Text:"duplicate ordinal",EmbeddingHash:make([]byte,32),Vector:[]float32{0,1}}}};if _,err:=s.ReplaceDocument(ctx,broken);err==nil{t.Fatal("expected replacement constraint failure")}
+	chunks,err:=s.ChunksForDocument(ctx,documentID);if err!=nil||len(chunks)!=1||chunks[0].Text!="durable old evidence"{t.Fatalf("rollback lost original chunks: %+v err=%v",chunks,err)};oldIDs,err:=s.SearchFTS(ctx,"durable","",10);if err!=nil||len(oldIDs)!=1{t.Fatalf("original FTS row missing: ids=%v err=%v",oldIDs,err)};newIDs,err:=s.SearchFTS(ctx,"replacement","",10);if err!=nil||len(newIDs)!=0{t.Fatalf("partial FTS row survived: ids=%v err=%v",newIDs,err)};if err:=s.IndexIntegrityCheck(ctx,2);err!=nil{t.Fatal(err)};if err:=s.Close();err!=nil{t.Fatal(err)}
+	s,err=Open(ctx,path);if err!=nil{t.Fatal(err)};defer s.Close();chunks,err=s.ChunksForDocument(ctx,documentID);if err!=nil||len(chunks)!=1||chunks[0].Text!="durable old evidence"{t.Fatalf("restart after rollback lost original: %+v err=%v",chunks,err)}
+}
+
+func TestConcurrentStoresWaitForWriterAndPreserveWrites(t *testing.T){
+	ctx:=context.Background();path:=filepath.Join(t.TempDir(),"contention.db");first,err:=Open(ctx,path);if err!=nil{t.Fatal(err)};defer first.Close();second,err:=Open(ctx,path);if err!=nil{t.Fatal(err)};defer second.Close();tx,err:=first.db.BeginTx(ctx,nil);if err!=nil{t.Fatal(err)};if _,err:=tx.ExecContext(ctx,`INSERT INTO meta(key,value) VALUES('held_write','first')`);err!=nil{tx.Rollback();t.Fatal(err)}
+	done:=make(chan error,1);go func(){done<-second.SetMeta(ctx,"concurrent_write","second")}();select{case err:=<-done:tx.Rollback();t.Fatalf("concurrent writer returned before lock release: %v",err);case <-time.After(100*time.Millisecond):};if err:=tx.Commit();err!=nil{t.Fatal(err)};select{case err:=<-done:if err!=nil{t.Fatal(err)};case <-time.After(3*time.Second):t.Fatal("concurrent writer did not resume after lock release")}
+	var wg sync.WaitGroup;errors:=make(chan error,20);for n:=0;n<20;n++{wg.Add(1);go func(n int){defer wg.Done();target:=first;if n%2==1{target=second};errors<-target.SetMeta(ctx,fmt.Sprintf("parallel_%02d",n),fmt.Sprint(n))}(n)};wg.Wait();close(errors);for err:=range errors{if err!=nil{t.Fatal(err)}};for n:=0;n<20;n++{value,err:=first.Meta(ctx,fmt.Sprintf("parallel_%02d",n));if err!=nil||value!=fmt.Sprint(n){t.Fatalf("parallel write %d: value=%q err=%v",n,value,err)}}
 }
 
 func assertIntegrityError(t *testing.T,s *Store,ctx context.Context,dimensions int,want string){t.Helper();err:=s.IndexIntegrityCheck(ctx,dimensions);if err==nil||!strings.Contains(err.Error(),want){t.Fatalf("expected integrity error containing %q, got %v",want,err)}}

@@ -113,7 +113,7 @@ func (s *Store) Path() string { return s.path }
 
 func (s *Store) migrate(ctx context.Context) error {
 	statements := []string{
-		`PRAGMA journal_mode=WAL`, `PRAGMA synchronous=NORMAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`,
+		`PRAGMA busy_timeout=5000`, `PRAGMA journal_mode=WAL`, `PRAGMA synchronous=NORMAL`, `PRAGMA foreign_keys=ON`,
 		`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS roots (id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS documents (

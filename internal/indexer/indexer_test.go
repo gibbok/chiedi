@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -20,6 +21,8 @@ type invalidOutputEmbedder struct{embedding.Projection}
 func (invalidOutputEmbedder) Embed(context.Context,[]string)([][]float32,error){return [][]float32{},nil}
 type nonFiniteOutputEmbedder struct{embedding.Projection}
 func (nonFiniteOutputEmbedder) Embed(_ context.Context,texts []string)([][]float32,error){out:=make([][]float32,len(texts));for n:=range out{out[n]=make([]float32,(embedding.Projection{}).Dimensions());out[n][0]=float32(math.NaN())};return out,nil}
+type cancelEmbedder struct{embedding.Projection;started chan struct{}}
+func (e cancelEmbedder)Embed(ctx context.Context,_ []string)([][]float32,error){close(e.started);<-ctx.Done();return nil,ctx.Err()}
 
 func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();db:=filepath.Join(t.TempDir(),"index.db")
@@ -82,6 +85,21 @@ func TestReplacementWithSameSizeAndMtimeIsDetectedByIdentity(t *testing.T){
 func TestRenameAcrossFormatsReextractsDocument(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();textPath:=filepath.Join(root,"guide.txt");writeAt(t,textPath,"# Guide\n\nBody",time.Unix(1700000000,0));s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};i:=Indexer{Store:s,Embedder:embedding.Projection{}};if _,err:=i.Reconcile(ctx);err!=nil{t.Fatal(err)}
 	markdownPath:=filepath.Join(root,"guide.md");if err:=os.Rename(textPath,markdownPath);err!=nil{t.Fatal(err)};stats,err:=i.Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.Renamed!=1||stats.ExtractionJobs!=1{t.Fatalf("cross-format rename was treated as metadata-only: %+v",stats)};documents,err:=s.ListDocuments(ctx,"","","");if err!=nil||len(documents)!=1{t.Fatalf("documents=%+v err=%v",documents,err)};if documents[0].RelativePath!="guide.md"||documents[0].Format!="md"{t.Fatalf("format metadata is stale: %+v",documents[0])};chunks,err:=s.ChunksForDocument(ctx,documents[0].ID);if err!=nil||len(chunks)!=1{t.Fatalf("chunks=%+v err=%v",chunks,err)};if chunks[0].Heading!="Guide"||chunks[0].Text!="Body"{t.Fatalf("Markdown provenance was not regenerated: %+v",chunks[0])}
+}
+
+func TestCancellationDuringEmbeddingPreservesPreviousDocument(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();path:=filepath.Join(root,"doc.txt");writeAt(t,path,"old durable content",time.Now().Add(-2*time.Second));dbPath:=filepath.Join(t.TempDir(),"cancel.db");s,err:=store.Open(ctx,dbPath);if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};if _,err:=(Indexer{Store:s,Embedder:embedding.Projection{}}).Reconcile(ctx);err!=nil{t.Fatal(err)};writeAt(t,path,"new interrupted content",time.Now())
+	started:=make(chan struct{});cancelCtx,cancel:=context.WithCancel(ctx);done:=make(chan error,1);go func(){_,err:=(Indexer{Store:s,Embedder:cancelEmbedder{Projection:embedding.Projection{},started:started}}).Reconcile(cancelCtx);done<-err}();select{case <-started:cancel();case <-time.After(2*time.Second):t.Fatal("embedding did not start")};select{case err:=<-done:if !errors.Is(err,context.Canceled){t.Fatalf("got %v",err)};case <-time.After(2*time.Second):t.Fatal("reconciliation did not stop after cancellation")}
+	documents,err:=s.ListDocuments(ctx,"","","");if err!=nil||len(documents)!=1{t.Fatalf("documents=%+v err=%v",documents,err)};chunks,err:=s.ChunksForDocument(ctx,documents[0].ID);if err!=nil||len(chunks)!=1||chunks[0].Text!="old durable content"{t.Fatalf("cancelled replacement damaged prior data: chunks=%+v err=%v",chunks,err)};if err:=s.IndexIntegrityCheck(ctx,(embedding.Projection{}).Dimensions());err!=nil{t.Fatal(err)}
+}
+
+func TestUnavailableRootDoesNotDeleteIndexedData(t *testing.T){
+	ctx:=context.Background();parent:=t.TempDir();root:=filepath.Join(parent,"corpus");if err:=os.Mkdir(root,0o700);err!=nil{t.Fatal(err)};writeAt(t,filepath.Join(root,"doc.txt"),"retained evidence",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"offline.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};i:=Indexer{Store:s,Embedder:embedding.Projection{}};if _,err:=i.Reconcile(ctx);err!=nil{t.Fatal(err)};offline:=filepath.Join(parent,"corpus-offline");if err:=os.Rename(root,offline);err!=nil{t.Fatal(err)};stats,err:=i.Reconcile(ctx);if err==nil{t.Fatal("expected unavailable-root error")};if stats.Deleted!=0{t.Fatalf("unavailable root deleted documents: %+v",stats)};counts,countErr:=s.Counts(ctx);if countErr!=nil{t.Fatal(countErr)};if counts.Documents!=1||counts.Chunks!=1{t.Fatalf("unavailable root lost index data: %+v",counts)};ids,searchErr:=s.SearchFTS(ctx,"retained","",10);if searchErr!=nil||len(ids)!=1{t.Fatalf("retained evidence unavailable: ids=%v err=%v",ids,searchErr)}
+}
+
+func TestSymlinksCannotEscapeConfiguredRoot(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();outside:=t.TempDir();writeAt(t,filepath.Join(root,"local.txt"),"local evidence",time.Now());writeAt(t,filepath.Join(outside,"secret.txt"),"external secret marker",time.Now());if err:=os.Symlink(outside,filepath.Join(root,"linked-directory"));err!=nil{t.Skipf("directory symlinks unavailable: %v",err)};if err:=os.Symlink(filepath.Join(outside,"secret.txt"),filepath.Join(root,"linked-file.txt"));err!=nil{t.Skipf("file symlinks unavailable: %v",err)}
+	s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"symlink.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};stats,err:=(Indexer{Store:s,Embedder:embedding.Projection{}}).Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.ScannedFiles!=1{t.Fatalf("symlink targets were scanned: %+v",stats)};documents,err:=s.ListDocuments(ctx,"","","");if err!=nil||len(documents)!=1||documents[0].RelativePath!="local.txt"{t.Fatalf("unexpected indexed documents: %+v err=%v",documents,err)};ids,err:=s.SearchFTS(ctx,"external","",10);if err!=nil||len(ids)!=0{t.Fatalf("external symlink content was indexed: ids=%v err=%v",ids,err)}
 }
 
 func writeAt(t *testing.T,path,content string,mtime time.Time){t.Helper();if err:=os.WriteFile(path,[]byte(content),0o600);err!=nil{t.Fatal(err)};if err:=os.Chtimes(path,mtime,mtime);err!=nil{t.Fatal(err)}}
