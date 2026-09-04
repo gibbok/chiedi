@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/gibbok/local-genius/internal/embedding"
+	"github.com/gibbok/local-genius/internal/extract"
 	"github.com/gibbok/local-genius/internal/store"
 )
 
 type incompatibleEmbedder struct{embedding.Projection}
 func (incompatibleEmbedder) ID()string{return "different-model"}
+type invalidOutputEmbedder struct{embedding.Projection}
+func (invalidOutputEmbedder) Embed(context.Context,[]string)([][]float32,error){return [][]float32{},nil}
 
 func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();db:=filepath.Join(t.TempDir(),"index.db")
@@ -34,10 +37,23 @@ func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	docs,err:=s.ListDocuments(ctx,"","","indexed");if err!=nil{t.Fatal(err)};if len(docs)!=0{t.Fatalf("indexed docs remain: %+v",docs)}
 }
 
+func TestOversizedFileIsRejectedBeforeReading(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();path:=filepath.Join(root,"huge.txt");file,err:=os.Create(path);if err!=nil{t.Fatal(err)};if err:=file.Truncate(extract.MaxFileBytes+1);err!=nil{file.Close();t.Fatal(err)};file.Close()
+	s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
+	stats,err:=(Indexer{Store:s,Embedder:embedding.Projection{}}).Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.Failed!=1||stats.EmbeddingJobs!=0{t.Fatalf("stats=%+v",stats)}
+	docs,err:=s.ListDocuments(ctx,"","","failed");if err!=nil{t.Fatal(err)};if len(docs)!=1{t.Fatalf("failed docs=%d",len(docs))}
+}
+
 func TestRejectsEmbeddingModelMismatch(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();writeAt(t,filepath.Join(root,"doc.txt"),"semantic content",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
 	if _,err:=(Indexer{Store:s,Embedder:embedding.Projection{}}).Reconcile(ctx);err!=nil{t.Fatal(err)}
 	if _,err:=(Indexer{Store:s,Embedder:incompatibleEmbedder{}}).Reconcile(ctx);err==nil{t.Fatal("expected embedding model mismatch") } else if got:=err.Error();got==""{t.Fatal(fmt.Errorf("empty mismatch error"))}
+}
+
+func TestRejectsInvalidEmbeddingOutput(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();writeAt(t,filepath.Join(root,"doc.txt"),"semantic content",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
+	if _,err:=(Indexer{Store:s,Embedder:invalidOutputEmbedder{}}).Reconcile(ctx);err==nil{t.Fatal("expected invalid embedding output error")}
+	counts,err:=s.Counts(ctx);if err!=nil{t.Fatal(err)};if counts.Documents!=0||counts.Chunks!=0{t.Fatalf("partial index was persisted: %+v",counts)}
 }
 
 func writeAt(t *testing.T,path,content string,mtime time.Time){t.Helper();if err:=os.WriteFile(path,[]byte(content),0o600);err!=nil{t.Fatal(err)};if err:=os.Chtimes(path,mtime,mtime);err!=nil{t.Fatal(err)}}

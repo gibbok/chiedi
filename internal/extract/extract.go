@@ -1,7 +1,6 @@
 package extract
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -135,7 +134,8 @@ func markdownHeading(line string) (int, string) {
 	return level, strings.TrimSpace(trim[level:])
 }
 
-func pdfFile(ctx context.Context, path string) (Document, error) {
+func pdfFile(ctx context.Context, path string) (doc Document, err error) {
+	defer func(){if recovered:=recover();recovered!=nil{doc=Document{};err=fmt.Errorf("parse PDF: parser panic: %v",recovered)}}()
 	r, err := pdf.Open(path)
 	if err != nil {
 		return Document{}, fmt.Errorf("parse PDF: %w", err)
@@ -143,7 +143,7 @@ func pdfFile(ctx context.Context, path string) (Document, error) {
 	if r.NumPage() > MaxPDFPages {
 		return Document{}, fmt.Errorf("PDF exceeds %d-page limit", MaxPDFPages)
 	}
-	doc := Document{Title: filepath.Base(path)}
+	doc = Document{Title: filepath.Base(path)}
 	total := 0
 	for pageNo := 1; pageNo <= r.NumPage(); pageNo++ {
 		if err := ctx.Err(); err != nil {
@@ -191,11 +191,7 @@ func pdfFile(ctx context.Context, path string) (Document, error) {
 func normalize(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
-	var out strings.Builder
-	scan := bufio.NewScanner(strings.NewReader(s))
-	for scan.Scan() {
-		out.WriteString(strings.TrimRight(scan.Text(), " \t"))
-		out.WriteByte('\n')
-	}
-	return strings.TrimSuffix(out.String(), "\n")
+	lines := strings.Split(s, "\n")
+	for i := range lines { lines[i] = strings.TrimRight(lines[i], " \t") }
+	return strings.TrimSuffix(strings.Join(lines, "\n"), "\n")
 }

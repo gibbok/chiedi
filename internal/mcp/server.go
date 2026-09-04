@@ -36,18 +36,22 @@ type response struct {
 type rpcError struct{Code int `json:"code"`;Message string `json:"message"`}
 
 func (s Server) Serve(ctx context.Context,in io.Reader,out io.Writer)error{
-	scanner:=bufio.NewScanner(in);scanner.Buffer(make([]byte,64<<10),4<<20);encoder:=json.NewEncoder(out)
-	for scanner.Scan(){
-		if err:=ctx.Err();err!=nil{return err}
-		line:=scanner.Bytes();if len(strings.TrimSpace(string(line)))==0{continue}
+	type scanItem struct{line []byte;err error;done bool};items:=make(chan scanItem);scanner:=bufio.NewScanner(in);scanner.Buffer(make([]byte,64<<10),4<<20)
+	go func(){for scanner.Scan(){item:=scanItem{line:append([]byte(nil),scanner.Bytes()...)};select{case items<-item:case <-ctx.Done():return}};select{case items<-scanItem{err:scanner.Err(),done:true}:case <-ctx.Done():}}()
+	encoder:=json.NewEncoder(out)
+	for {
+		var item scanItem
+		select{case <-ctx.Done():return ctx.Err();case item=<-items:}
+		if item.done{return item.err}
+		line:=item.line;if len(strings.TrimSpace(string(line)))==0{continue}
 		var req request
 		if err:=json.Unmarshal(line,&req);err!=nil{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:nil,Error:&rpcError{-32700,"parse error"}});err!=nil{return err};continue}
 		if len(req.ID)==0 { continue }
 		var id any;if err:=json.Unmarshal(req.ID,&id);err!=nil{id=nil}
+		if req.JSONRPC!="2.0"||req.Method==""{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:id,Error:&rpcError{-32600,"invalid request"}});err!=nil{return err};continue}
 		result,rpcErr:=s.handle(ctx,req)
 		if err:=encoder.Encode(response{JSONRPC:"2.0",ID:id,Result:result,Error:rpcErr});err!=nil{return err}
 	}
-	return scanner.Err()
 }
 
 func (s Server) handle(ctx context.Context,req request)(any,*rpcError){

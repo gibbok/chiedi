@@ -39,7 +39,7 @@ func Run(ctx context.Context,args []string,stdin io.Reader,stdout,stderr io.Writ
 		search:=flag.NewFlagSet("search",flag.ContinueOnError);search.SetOutput(stderr);limit:=search.Int("limit",10,"maximum results");prefix:=search.String("path-prefix","","relative path prefix");if err:=search.Parse(rest[1:]);err!=nil{return 2};question:=strings.Join(search.Args()," ");if question==""{return fail(errors.New("usage: docdex search [--limit N] <question>"))}
 		if _,err:=idx.Reconcile(ctx);err!=nil{return fail(fmt.Errorf("reconcile index: %w",err))}
 		results,err:=ret.Retrieve(ctx,question,*prefix,*limit);if err!=nil{return fail(err)};for _,r:=range results{location:=r.Path;if r.Heading!=""{location+=" — "+r.Heading};if r.PageStart>0{location+=" — page "+strconv.Itoa(r.PageStart)};fmt.Fprintf(stdout,"[%d] %s\n%s\n\n",r.Rank,location,r.Text)};return 0
-	case "mcp":server:=mcp.Server{Store:s,Indexer:idx,Retriever:ret};if err:=server.Serve(ctx,stdin,stdout);err!=nil{return fail(err)};return 0
+	case "mcp":server:=mcp.Server{Store:s,Indexer:idx,Retriever:ret};if err:=server.Serve(ctx,stdin,stdout);err!=nil&&!errors.Is(err,context.Canceled){return fail(err)};return 0
 	default:usage(stderr);return fail(fmt.Errorf("unknown command %q",command))
 	}
 }
