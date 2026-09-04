@@ -1,19 +1,70 @@
-.PHONY: build test race vet verify verify-full
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
 
-build:
-	go build -o bin/docdex ./cmd/docdex
+BINARY := bin/docdex
 
-test:
+.PHONY: help build clean deps test test-unit test-race race test-vet vet test-repeat test-e2e test-all demo verify verify-full
+
+help: ## Show the available developer commands
+	@printf '%s\n' \
+	  'docdex developer commands' \
+	  '' \
+	  '  make demo         Build and run a readable local walkthrough' \
+	  '  make test-all     Run every automated verification layer' \
+	  '  make test-e2e     Run the real-binary functional acceptance test' \
+	  '  make test-unit    Run all Go tests once' \
+	  '  make test-race    Run all tests with the race detector' \
+	  '  make test-repeat  Repeat incremental and retrieval tests three times' \
+	  '  make test-vet     Run Go static analysis' \
+	  '  make deps         Verify downloaded module checksums' \
+	  '  make build        Build bin/docdex' \
+	  '  make clean        Remove local build output' \
+	  '' \
+	  'See docs/testing.md for coverage and expected results.'
+
+build: ## Build the docdex executable
+	go build -o $(BINARY) ./cmd/docdex
+
+clean: ## Remove local build output
+	rm -rf bin
+
+deps: ## Verify module downloads against go.sum
+	go mod verify
+
+test: test-unit ## Backward-compatible alias for test-unit
+
+test-unit: ## Run all tests once
 	go test ./...
 
-race:
+test-race: ## Run all tests with the Go race detector
 	go test -race ./...
 
-vet:
+race: test-race ## Backward-compatible alias for test-race
+
+test-vet: ## Run Go static analysis
 	go vet ./...
 
-verify: test race vet build
+vet: test-vet ## Backward-compatible alias for test-vet
 
-verify-full: verify
+test-repeat: ## Repeat the state-sensitive packages to expose flakes
 	go test -count=3 ./internal/indexer ./internal/retrieval
-	DOCDEX_E2E=1 go test -count=1 ./internal/e2e
+
+test-e2e: ## Run the real compiled binary through the acceptance scenario
+	DOCDEX_E2E=1 go test -v -count=1 ./internal/e2e
+
+test-all: ## Run dependency, unit, race, vet, build, repeat, and E2E checks
+	$(MAKE) deps
+	$(MAKE) test-unit
+	$(MAKE) test-race
+	$(MAKE) test-vet
+	$(MAKE) build
+	$(MAKE) test-repeat
+	$(MAKE) test-e2e
+	$(MAKE) demo
+
+demo: build ## Exercise the CLI and MCP using an isolated temporary corpus
+	./scripts/demo.sh ./$(BINARY)
+
+verify: test-all ## Backward-compatible complete verification alias
+
+verify-full: test-all ## Backward-compatible complete verification alias

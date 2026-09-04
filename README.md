@@ -55,9 +55,18 @@ V1 indexes UTF-8 text, Markdown, and PDFs with an extractable text layer. It doe
 
 ## Verification
 
+For a human-readable walkthrough that creates its own temporary documents and exercises the CLI and MCP:
+
 ```bash
-make verify
-make verify-full
+make demo
 ```
 
-The full gate builds the real executable and exercises initialize → add → index → semantic search, exact retrieval, MCP calls, incremental update, rename, delete, reconciliation, and restart.
+For the complete automated gate:
+
+```bash
+make test-all
+```
+
+The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`.
+
+Run `make help` to see individual targets. See [Testing docdex](docs/testing.md) for expected behavior, preserved demo files, focused commands, and failure interpretation.
