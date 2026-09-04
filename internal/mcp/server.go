@@ -1,0 +1,95 @@
+package mcp
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/gibbok/local-genius/internal/indexer"
+	"github.com/gibbok/local-genius/internal/retrieval"
+	"github.com/gibbok/local-genius/internal/store"
+)
+
+type Server struct {
+	Store     *store.Store
+	Indexer   indexer.Indexer
+	Retriever retrieval.Retriever
+}
+
+type request struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+type response struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      any         `json:"id,omitempty"`
+	Result  any         `json:"result,omitempty"`
+	Error   *rpcError   `json:"error,omitempty"`
+}
+
+type rpcError struct{Code int `json:"code"`;Message string `json:"message"`}
+
+func (s Server) Serve(ctx context.Context,in io.Reader,out io.Writer)error{
+	scanner:=bufio.NewScanner(in);scanner.Buffer(make([]byte,64<<10),4<<20);encoder:=json.NewEncoder(out)
+	for scanner.Scan(){
+		if err:=ctx.Err();err!=nil{return err}
+		line:=scanner.Bytes();if len(strings.TrimSpace(string(line)))==0{continue}
+		var req request
+		if err:=json.Unmarshal(line,&req);err!=nil{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:nil,Error:&rpcError{-32700,"parse error"}});err!=nil{return err};continue}
+		if len(req.ID)==0 { continue }
+		var id any;if err:=json.Unmarshal(req.ID,&id);err!=nil{id=nil}
+		result,rpcErr:=s.handle(ctx,req)
+		if err:=encoder.Encode(response{JSONRPC:"2.0",ID:id,Result:result,Error:rpcErr});err!=nil{return err}
+	}
+	return scanner.Err()
+}
+
+func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
+	switch req.Method{
+	case "initialize":
+		return map[string]any{"protocolVersion":"2025-06-18","capabilities":map[string]any{"tools":map[string]any{"listChanged":false}},"serverInfo":map[string]any{"name":"docdex","version":"0.1.0"}},nil
+	case "ping":return map[string]any{},nil
+	case "tools/list":return map[string]any{"tools":toolDefinitions()},nil
+	case "tools/call":
+		var call struct{Name string `json:"name"`;Arguments json.RawMessage `json:"arguments"`};if err:=json.Unmarshal(req.Params,&call);err!=nil{return nil,&rpcError{-32602,"invalid tool parameters"}}
+		value,err:=s.call(ctx,call.Name,call.Arguments);if err!=nil{return map[string]any{"content":[]any{map[string]any{"type":"text","text":err.Error()}},"isError":true},nil}
+		encoded,_:=json.Marshal(value);return map[string]any{"content":[]any{map[string]any{"type":"text","text":string(encoded)}},"structuredContent":value,"isError":false},nil
+	default:return nil,&rpcError{-32601,"method not found"}
+	}
+}
+
+func (s Server) call(ctx context.Context,name string,args json.RawMessage)(any,error){
+	_,_ = s.Indexer.Reconcile(ctx)
+	switch name{
+	case "retrieve":
+		var a struct{Question string `json:"question"`;Limit int `json:"limit"`;PathPrefix string `json:"path_prefix"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};return s.Retriever.Retrieve(ctx,a.Question,a.PathPrefix,a.Limit)
+	case "read_chunks":
+		var a struct{ChunkIDs []int64 `json:"chunk_ids"`;Before int `json:"before"`;After int `json:"after"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};if len(a.ChunkIDs)==0{return nil,fmt.Errorf("chunk_ids is required")};if a.Before<0||a.After<0||a.Before>5||a.After>5{return nil,fmt.Errorf("before/after must be between 0 and 5")};return s.Store.ReadChunks(ctx,a.ChunkIDs,a.Before,a.After)
+	case "list_documents":
+		var a struct{PathPrefix string `json:"path_prefix"`;Extension string `json:"extension"`;Status string `json:"status"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};return s.Store.ListDocuments(ctx,a.PathPrefix,a.Extension,a.Status)
+	case "index_status":return Status(ctx,s.Store)
+	default:return nil,fmt.Errorf("unknown tool %q",name)
+	}
+}
+
+func decodeArgs(raw json.RawMessage,dst any)error{if len(raw)==0{return nil};dec:=json.NewDecoder(strings.NewReader(string(raw)));dec.DisallowUnknownFields();return dec.Decode(dst)}
+
+func Status(ctx context.Context,s *store.Store)(map[string]any,error){
+	counts,err:=s.Counts(ctx);if err!=nil{return nil,err};last,err:=s.Meta(ctx,"last_reconciliation");if err!=nil{return nil,err};model,_:=s.Meta(ctx,"embedding_model_id");dimensions,_:=s.Meta(ctx,"embedding_dimensions")
+	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts}
+	if last!=""{var parsed any;if json.Unmarshal([]byte(last),&parsed)==nil{result["last_reconciliation"]=parsed}}
+	return result,nil
+}
+
+func toolDefinitions()[]map[string]any{return []map[string]any{
+	{"name":"retrieve","description":"Retrieve semantically and lexically relevant document evidence.","inputSchema":map[string]any{"type":"object","required":[]string{"question"},"properties":map[string]any{"question":map[string]any{"type":"string"},"limit":map[string]any{"type":"integer","minimum":1,"maximum":50},"path_prefix":map[string]any{"type":"string"}}}},
+	{"name":"read_chunks","description":"Read chunks and bounded neighboring context.","inputSchema":map[string]any{"type":"object","required":[]string{"chunk_ids"},"properties":map[string]any{"chunk_ids":map[string]any{"type":"array","items":map[string]any{"type":"integer"}},"before":map[string]any{"type":"integer","minimum":0,"maximum":5},"after":map[string]any{"type":"integer","minimum":0,"maximum":5}}}},
+	{"name":"list_documents","description":"List indexed documents.","inputSchema":map[string]any{"type":"object","properties":map[string]any{"path_prefix":map[string]any{"type":"string"},"extension":map[string]any{"type":"string"},"status":map[string]any{"type":"string"}}}},
+	{"name":"index_status","description":"Inspect index state and last reconciliation work.","inputSchema":map[string]any{"type":"object","properties":map[string]any{}}},
+}}
