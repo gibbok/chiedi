@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -36,14 +37,19 @@ type Indexer struct {
 	Embedder embedding.Embedder
 }
 
+func (i Indexer) ValidateCompatibility(ctx context.Context) error {
+	if i.Store==nil||i.Embedder==nil{return fmt.Errorf("store and embedder are required")}
+	storedModel,err:=i.Store.Meta(ctx,"embedding_model_id");if err!=nil{return err}
+	storedDimensions,err:=i.Store.Meta(ctx,"embedding_dimensions");if err!=nil{return err}
+	counts,err:=i.Store.Counts(ctx);if err!=nil{return err}
+	if counts.Chunks>0&&storedModel==""{return fmt.Errorf("existing vectors have no embedding model identity; reindex into a new database")}
+	if storedModel!=""&&storedModel!=i.Embedder.ID(){return fmt.Errorf("index uses embedding model %q; configured model is %q: re-embedding is required",storedModel,i.Embedder.ID())}
+	if storedDimensions!=""&&storedDimensions!=fmt.Sprint(i.Embedder.Dimensions()){return fmt.Errorf("index uses %s-dimensional embeddings; configured model uses %d: re-embedding is required",storedDimensions,i.Embedder.Dimensions())}
+	return nil
+}
+
 func (i Indexer) Reconcile(ctx context.Context) (Stats,error) {
-	if i.Store==nil||i.Embedder==nil{return Stats{},fmt.Errorf("store and embedder are required")}
-	storedModel,err:=i.Store.Meta(ctx,"embedding_model_id");if err!=nil{return Stats{},err}
-	storedDimensions,err:=i.Store.Meta(ctx,"embedding_dimensions");if err!=nil{return Stats{},err}
-	counts,err:=i.Store.Counts(ctx);if err!=nil{return Stats{},err}
-	if counts.Chunks>0&&storedModel==""{return Stats{},fmt.Errorf("existing vectors have no embedding model identity; reindex into a new database")}
-	if storedModel!=""&&storedModel!=i.Embedder.ID(){return Stats{},fmt.Errorf("index uses embedding model %q; configured model is %q: re-embedding is required",storedModel,i.Embedder.ID())}
-	if storedDimensions!=""&&storedDimensions!=fmt.Sprint(i.Embedder.Dimensions()){return Stats{},fmt.Errorf("index uses %s-dimensional embeddings; configured model uses %d: re-embedding is required",storedDimensions,i.Embedder.Dimensions())}
+	if err:=i.ValidateCompatibility(ctx);err!=nil{return Stats{},err}
 	// Persist compatibility metadata before writing vectors. A metadata write
 	// failure must prevent an index that cannot later prove its model identity.
 	if err:=i.Store.SetMeta(ctx,"embedding_model_id",i.Embedder.ID());err!=nil{return Stats{},fmt.Errorf("persist embedding model identity: %w",err)}
@@ -76,7 +82,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		ext:=strings.ToLower(filepath.Ext(entry.Name()));if ext!=".txt"&&ext!=".md"&&ext!=".pdf"{return nil}
 		stats.ScannedFiles++
 		rel,err:=filepath.Rel(root.Path,path);if err!=nil{return err};rel=filepath.ToSlash(rel)
-		info,err:=entry.Info();if err!=nil{stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
+		info,err:=entry.Info();if err!=nil{rootHadWalkErrors=true;stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
 		identity:=fileIdentity(info)
 		old,found:=byPath[rel]
 		if !found&&identity!=""{if candidate,ok:=byIdentity[identity];ok&&!seen[candidate.ID]{old=candidate;found=true
@@ -115,7 +121,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		stored:=make([]store.Chunk,len(newChunks));var pending []string;var pendingAt []int
 		for n,c:=range newChunks{
 			stored[n]=store.Chunk{Ordinal:c.Ordinal,Heading:c.Heading,PageStart:c.PageStart,PageEnd:c.PageEnd,Text:c.Text,EmbeddingHash:c.EmbeddingHash[:]}
-			key:=string(c.EmbeddingHash[:]);if vectors:=reuse[key];len(vectors)>0{stored[n].Vector=vectors[0];reuse[key]=vectors[1:];stats.ReusedChunks++}else{pending=append(pending,c.EmbeddingText);pendingAt=append(pendingAt,n)}
+			key:=string(c.EmbeddingHash[:]);vectors:=reuse[key];for len(vectors)>0&&!validVector(vectors[0],i.Embedder.Dimensions()){vectors=vectors[1:]};if len(vectors)>0{stored[n].Vector=vectors[0];reuse[key]=vectors[1:];stats.ReusedChunks++}else{reuse[key]=vectors;pending=append(pending,c.EmbeddingText);pendingAt=append(pendingAt,n)}
 		}
 		if len(pending)>0{vectors,err:=i.Embedder.Embed(ctx,pending);if err!=nil{return err};if len(vectors)!=len(pending){return fmt.Errorf("embedding model returned %d vectors for %d texts",len(vectors),len(pending))};for n,v:=range vectors{if len(v)!=i.Embedder.Dimensions(){return fmt.Errorf("embedding model returned %d dimensions for text %d; expected %d",len(v),n,i.Embedder.Dimensions())};stored[pendingAt[n]].Vector=v};stats.EmbeddingJobs+=len(pending)}
 		id,err:=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:strings.TrimPrefix(ext,"."),Status:"indexed",Chunks:stored});if err!=nil{return err};seen[id]=true
@@ -134,3 +140,4 @@ func fileIdentity(info os.FileInfo)string{
 }
 
 func value(v reflect.Value)any{switch v.Kind(){case reflect.Uint,reflect.Uint8,reflect.Uint16,reflect.Uint32,reflect.Uint64:return v.Uint();case reflect.Int,reflect.Int8,reflect.Int16,reflect.Int32,reflect.Int64:return v.Int()};return ""}
+func validVector(v []float32,dimensions int)bool{if len(v)!=dimensions{return false};for _,x:=range v{if math.IsNaN(float64(x))||math.IsInf(float64(x),0){return false}};return true}
