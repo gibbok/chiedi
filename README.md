@@ -2,7 +2,7 @@
 
 `docdex` is a local-first semantic document retrieval engine for Codex. It indexes `.txt`, `.md`, and text-layer `.pdf` files into one SQLite database, combines local vector similarity with FTS5, and exposes grounded evidence through MCP over stdio.
 
-No document content, query, or embedding leaves the machine. The built-in 384-dimensional semantic projection model requires no model server or network access.
+No document content, query, or embedding leaves the machine. Database files use owner-only filesystem permissions. The built-in 384-dimensional semantic projection model requires no model server or network access.
 
 ## Quick start
 

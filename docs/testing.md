@@ -83,7 +83,7 @@ This executes the following checks sequentially:
 
 `make verify` and `make verify-full` remain aliases for `make test-all` so CI and older local workflows use the same gate.
 
-The unit layer includes edge-case regressions for empty databases, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only file replacement, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
+The unit layer includes edge-case regressions for empty databases, owner-only database permissions, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only and same-timestamp file replacement, cross-format rename, chunk overlap, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
 
 ## End-to-end acceptance test
 

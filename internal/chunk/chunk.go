@@ -12,6 +12,7 @@ import (
 const (
 	TargetRunes = 1800
 	MaxRunes    = 3000
+	OverlapRunes = 200
 )
 
 type Chunk struct {
@@ -80,14 +81,16 @@ func hardSplit(s string, max int) []string {
 	if len(runes) <= max {
 		return []string{s}
 	}
+	if max <= 0 {
+		return nil
+	}
+	overlap:=OverlapRunes;if overlap>=max{overlap=0}
 	var out []string
-	for len(runes) > 0 {
-		n := max
-		if len(runes) < n {
-			n = len(runes)
-		}
-		out = append(out, string(runes[:n]))
-		runes = runes[n:]
+	for start:=0;start<len(runes);{
+		end:=start+max;if end>len(runes){end=len(runes)}
+		out=append(out,string(runes[start:end]))
+		if end==len(runes){break}
+		start=end-overlap
 	}
 	return out
 }

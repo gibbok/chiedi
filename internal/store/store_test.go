@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"math"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,6 +30,10 @@ func TestRejectsNewerSchema(t *testing.T){
 	db,err:=sql.Open("sqlite",path);if err!=nil{t.Fatal(err)}
 	if _,err:=db.Exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta(key,value) VALUES('schema_version','999')`);err!=nil{t.Fatal(err)};db.Close()
 	_,err=Open(ctx,path);if err==nil||!strings.Contains(err.Error(),"newer than supported"){t.Fatalf("expected newer-schema error, got %v",err)}
+}
+
+func TestDatabaseUsesOwnerOnlyPermissions(t *testing.T){
+	if runtime.GOOS=="windows"{t.Skip("POSIX permission bits are not available")};ctx:=context.Background();path:=filepath.Join(t.TempDir(),"private.db");if err:=os.WriteFile(path,nil,0o666);err!=nil{t.Fatal(err)};if err:=os.Chmod(path,0o666);err!=nil{t.Fatal(err)};s,err:=Open(ctx,path);if err!=nil{t.Fatal(err)};defer s.Close();info,err:=os.Stat(path);if err!=nil{t.Fatal(err)};if info.Mode().Perm()!=0o600{t.Fatalf("database permissions are %04o; want 0600",info.Mode().Perm())};if wal,err:=os.Stat(path+"-wal");err==nil&&wal.Mode().Perm()&0o077!=0{t.Fatalf("WAL permissions are %04o; group/world access must be disabled",wal.Mode().Perm())}
 }
 
 func TestEmptyCollectionsEncodeAsArrays(t *testing.T){

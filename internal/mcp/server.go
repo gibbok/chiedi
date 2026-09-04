@@ -30,7 +30,7 @@ type request struct {
 
 type response struct {
 	JSONRPC string      `json:"jsonrpc"`
-	ID      any         `json:"id,omitempty"`
+	ID      any         `json:"id"`
 	Result  any         `json:"result,omitempty"`
 	Error   *rpcError   `json:"error,omitempty"`
 }
@@ -49,12 +49,14 @@ func (s Server) Serve(ctx context.Context,in io.Reader,out io.Writer)error{
 		var req request
 		if err:=json.Unmarshal(line,&req);err!=nil{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:nil,Error:&rpcError{-32700,"parse error"}});err!=nil{return err};continue}
 		if len(req.ID)==0 { continue }
-		var id any;if err:=json.Unmarshal(req.ID,&id);err!=nil{id=nil}
+		id,validID:=responseID(req.ID);if !validID{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:nil,Error:&rpcError{-32600,"invalid request"}});err!=nil{return err};continue}
 		if req.JSONRPC!="2.0"||req.Method==""{if err:=encoder.Encode(response{JSONRPC:"2.0",ID:id,Error:&rpcError{-32600,"invalid request"}});err!=nil{return err};continue}
 		result,rpcErr:=s.handle(ctx,req)
 		if err:=encoder.Encode(response{JSONRPC:"2.0",ID:id,Result:result,Error:rpcErr});err!=nil{return err}
 	}
 }
+
+func responseID(raw json.RawMessage)(any,bool){dec:=json.NewDecoder(bytes.NewReader(raw));dec.UseNumber();var value any;if err:=dec.Decode(&value);err!=nil{return nil,false};switch value.(type){case nil,string,json.Number:return json.RawMessage(append([]byte(nil),raw...)),true;default:return nil,false}}
 
 func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 	switch req.Method{

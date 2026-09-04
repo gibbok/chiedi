@@ -89,6 +89,12 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o700); err != nil {
 		return nil, err
 	}
+	// Keep local document contents private and establish the mode before SQLite
+	// creates journals beside the database.
+	file, err := os.OpenFile(abs, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil { return nil, err }
+	if err := file.Close(); err != nil { return nil, err }
+	if err := os.Chmod(abs,0o600); err != nil { return nil, err }
 	db, err := sql.Open("sqlite", abs)
 	if err != nil {
 		return nil, err

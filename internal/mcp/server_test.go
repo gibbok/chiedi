@@ -28,7 +28,12 @@ func TestProtocolValidationAndInitialize(t *testing.T){
 	var responses []map[string]any
 	for _,line:=range lines{var response map[string]any;if err:=json.Unmarshal([]byte(line),&response);err!=nil{t.Fatal(err)};responses=append(responses,response)}
 	if responses[0]["error"]==nil||responses[1]["error"]==nil{t.Fatalf("invalid requests accepted: %+v",responses)}
+	if id,exists:=responses[0]["id"];!exists||id!=nil{t.Fatalf("parse error must include id:null: %+v",responses[0])}
 	if responses[2]["result"]==nil||responses[2]["error"]!=nil{t.Fatalf("initialize failed: %+v",responses[2])}
+}
+
+func TestRequestIDValidationAndPrecision(t *testing.T){
+	input:=strings.Join([]string{`{"jsonrpc":"2.0","id":900719925474099312345,"method":"ping"}`,`{"jsonrpc":"2.0","id":{"bad":true},"method":"ping"}`},"\n");var output bytes.Buffer;if err:=(Server{}).Serve(context.Background(),strings.NewReader(input),&output);err!=nil{t.Fatal(err)};lines:=strings.Split(strings.TrimSpace(output.String()),"\n");if len(lines)!=2{t.Fatalf("responses=%d: %s",len(lines),output.String())};if !strings.Contains(lines[0],`"id":900719925474099312345`){t.Fatalf("large request ID lost precision: %s",lines[0])};var invalid map[string]any;if err:=json.Unmarshal([]byte(lines[1]),&invalid);err!=nil{t.Fatal(err)};if invalid["id"]!=nil||invalid["error"]==nil{t.Fatalf("invalid ID was accepted: %+v",invalid)}
 }
 
 func TestCancellationDoesNotWaitForStdin(t *testing.T){

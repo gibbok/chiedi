@@ -18,4 +18,5 @@ func TestDeterministicBoundedChunks(t *testing.T) {
 			t.Fatalf("chunk %d is not deterministic/bounded", i)
 		}
 	}
+	if got:=len([]rune(a[1].Text));got!=100+OverlapRunes{t.Fatalf("hard-split overlap=%d runes, want %d",got-100,OverlapRunes)}
 }

@@ -81,25 +81,26 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		if entry.Type()&os.ModeSymlink!=0{if entry.IsDir(){return filepath.SkipDir};return nil}
 		if entry.IsDir(){return nil}
 		ext:=strings.ToLower(filepath.Ext(entry.Name()));if ext!=".txt"&&ext!=".md"&&ext!=".pdf"{return nil}
+		format:=strings.TrimPrefix(ext,".")
 		stats.ScannedFiles++
 		rel,err:=filepath.Rel(root.Path,path);if err!=nil{return err};rel=filepath.ToSlash(rel)
 		info,err:=entry.Info();if err!=nil{rootHadWalkErrors=true;stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
 		identity:=fileIdentity(info)
 		old,found:=byPath[rel]
 		if !found&&identity!=""{if candidate,ok:=byIdentity[identity];ok&&!seen[candidate.ID]{old=candidate;found=true
-			if candidate.Size==info.Size()&&candidate.MtimeNS==info.ModTime().UnixNano(){
+			if sameFileMetadata(candidate,info,identity)&&candidate.Format==format{
 				if err:=i.Store.RenameDocument(ctx,candidate.ID,rel,identity,info.Size(),info.ModTime().UnixNano());err!=nil{return err};seen[candidate.ID]=true;stats.Renamed++;return nil
 			}
 			if err:=i.Store.RenameDocument(ctx,candidate.ID,rel,identity,info.Size(),info.ModTime().UnixNano());err!=nil{return err};old.RelativePath=rel;stats.Renamed++
 		}}
-		if found{seen[old.ID]=true;if old.Size==info.Size()&&old.MtimeNS==info.ModTime().UnixNano(){return nil}}
+		if found{seen[old.ID]=true;if sameFileMetadata(old,info,identity)&&old.Format==format{return nil}}
 		if info.Size()>extract.MaxFileBytes{
 			stats.Failed++;message:=fmt.Sprintf("file exceeds %d-byte limit",extract.MaxFileBytes)
-			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),Format:strings.TrimPrefix(ext,"."),Status:"failed",Error:message});return err
+			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),Format:format,Status:"failed",Error:message});return err
 		}
 		content,err:=readFileBounded(path,extract.MaxFileBytes);if err!=nil{stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
 		hash:=sha256.Sum256(content)
-		if found&&bytes.Equal(old.ContentHash,hash[:]){
+		if found&&old.Format==format&&bytes.Equal(old.ContentHash,hash[:]){
 			if old.RelativePath!=rel{if err:=i.Store.RenameDocument(ctx,old.ID,rel,identity,info.Size(),info.ModTime().UnixNano());err!=nil{return err};stats.Renamed++}else{if err:=i.Store.UpdateDocumentMetadata(ctx,old.ID,identity,info.Size(),info.ModTime().UnixNano());err!=nil{return err}}
 			return nil
 		}
@@ -107,10 +108,11 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		doc,extractErr:=extract.File(ctx,path)
 		after,statErr:=os.Stat(path)
 		if statErr!=nil{stats.Errors=append(stats.Errors,fmt.Sprintf("%s changed during indexing: %v",rel,statErr));return nil}
-		if after.Size()!=info.Size()||after.ModTime().UnixNano()!=info.ModTime().UnixNano(){stats.Errors=append(stats.Errors,fmt.Sprintf("%s changed during indexing; deferred until the next reconciliation",rel));return nil}
+		afterIdentity:=fileIdentity(after);identityChanged:=identity!=""&&afterIdentity!=""&&identity!=afterIdentity
+		if after.Size()!=info.Size()||after.ModTime().UnixNano()!=info.ModTime().UnixNano()||identityChanged{stats.Errors=append(stats.Errors,fmt.Sprintf("%s changed during indexing; deferred until the next reconciliation",rel));return nil}
 		if extractErr!=nil{
 			stats.Failed++
-			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:strings.TrimPrefix(ext,"."),Status:"failed",Error:extractErr.Error()})
+			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:format,Status:"failed",Error:extractErr.Error()})
 			if err!=nil{return err};if found{seen[old.ID]=true};return nil
 		}
 		newChunks:=chunk.Document(doc)
@@ -125,7 +127,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 			key:=string(c.EmbeddingHash[:]);vectors:=reuse[key];for len(vectors)>0&&!validVector(vectors[0],i.Embedder.Dimensions()){vectors=vectors[1:]};if len(vectors)>0{stored[n].Vector=vectors[0];reuse[key]=vectors[1:];stats.ReusedChunks++}else{reuse[key]=vectors;pending=append(pending,c.EmbeddingText);pendingAt=append(pendingAt,n)}
 		}
 		if len(pending)>0{vectors,err:=i.Embedder.Embed(ctx,pending);if err!=nil{return err};if len(vectors)!=len(pending){return fmt.Errorf("embedding model returned %d vectors for %d texts",len(vectors),len(pending))};for n,v:=range vectors{if !validVector(v,i.Embedder.Dimensions()){return fmt.Errorf("embedding model returned an invalid vector for text %d; expected %d finite dimensions",n,i.Embedder.Dimensions())};stored[pendingAt[n]].Vector=v};stats.EmbeddingJobs+=len(pending)}
-		id,err:=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:strings.TrimPrefix(ext,"."),Status:"indexed",Chunks:stored});if err!=nil{return err};seen[id]=true
+		id,err:=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:format,Status:"indexed",Chunks:stored});if err!=nil{return err};seen[id]=true
 		return nil
 	})
 	if walkErr!=nil{return walkErr}
@@ -141,5 +143,6 @@ func fileIdentity(info os.FileInfo)string{
 }
 
 func value(v reflect.Value)any{switch v.Kind(){case reflect.Uint,reflect.Uint8,reflect.Uint16,reflect.Uint32,reflect.Uint64:return v.Uint();case reflect.Int,reflect.Int8,reflect.Int16,reflect.Int32,reflect.Int64:return v.Int()};return ""}
+func sameFileMetadata(document store.Document,info os.FileInfo,identity string)bool{if document.Size!=info.Size()||document.MtimeNS!=info.ModTime().UnixNano(){return false};return document.Identity==""||identity==""||document.Identity==identity}
 func validVector(v []float32,dimensions int)bool{if len(v)!=dimensions{return false};for _,x:=range v{if math.IsNaN(float64(x))||math.IsInf(float64(x),0){return false}};return true}
 func readFileBounded(path string,limit int64)([]byte,error){file,err:=os.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil}
