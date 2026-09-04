@@ -65,7 +65,7 @@ func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 }
 
 func (s Server) call(ctx context.Context,name string,args json.RawMessage)(any,error){
-	_,_ = s.Indexer.Reconcile(ctx)
+	if _,err:=s.Indexer.Reconcile(ctx);err!=nil{return nil,fmt.Errorf("reconcile index: %w",err)}
 	switch name{
 	case "retrieve":
 		var a struct{Question string `json:"question"`;Limit int `json:"limit"`;PathPrefix string `json:"path_prefix"`};if err:=decodeArgs(args,&a);err!=nil{return nil,err};return s.Retriever.Retrieve(ctx,a.Question,a.PathPrefix,a.Limit)

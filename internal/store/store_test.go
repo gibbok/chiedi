@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,4 +19,11 @@ func TestLifecycleFTSAndDelete(t *testing.T){
 	counts,err:=s.Counts(ctx);if err!=nil||counts.Chunks!=1{t.Fatalf("counts=%+v err=%v",counts,err)}
 	if err:=s.DeleteDocument(ctx,id);err!=nil{t.Fatal(err)}
 	counts,_=s.Counts(ctx);if counts.Documents!=0||counts.Chunks!=0{t.Fatalf("stale data: %+v",counts)}
+}
+
+func TestRejectsNewerSchema(t *testing.T){
+	ctx:=context.Background();path:=filepath.Join(t.TempDir(),"future.db")
+	db,err:=sql.Open("sqlite",path);if err!=nil{t.Fatal(err)}
+	if _,err:=db.Exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta(key,value) VALUES('schema_version','999')`);err!=nil{t.Fatal(err)};db.Close()
+	_,err=Open(ctx,path);if err==nil||!strings.Contains(err.Error(),"newer than supported"){t.Fatalf("expected newer-schema error, got %v",err)}
 }

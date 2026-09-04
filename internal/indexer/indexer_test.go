@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,6 +11,9 @@ import (
 	"github.com/gibbok/local-genius/internal/embedding"
 	"github.com/gibbok/local-genius/internal/store"
 )
+
+type incompatibleEmbedder struct{embedding.Projection}
+func (incompatibleEmbedder) ID()string{return "different-model"}
 
 func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	ctx:=context.Background();root:=t.TempDir();db:=filepath.Join(t.TempDir(),"index.db")
@@ -28,6 +32,12 @@ func TestIncrementalReuseRenameDeleteAndFailure(t *testing.T){
 	if err:=os.Remove(renamed);err!=nil{t.Fatal(err)}
 	deleted,err:=i.Reconcile(ctx);if err!=nil{t.Fatal(err)};if deleted.Deleted!=1{t.Fatalf("delete=%+v",deleted)}
 	docs,err:=s.ListDocuments(ctx,"","","indexed");if err!=nil{t.Fatal(err)};if len(docs)!=0{t.Fatalf("indexed docs remain: %+v",docs)}
+}
+
+func TestRejectsEmbeddingModelMismatch(t *testing.T){
+	ctx:=context.Background();root:=t.TempDir();writeAt(t,filepath.Join(root,"doc.txt"),"semantic content",time.Now());s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"index.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
+	if _,err:=(Indexer{Store:s,Embedder:embedding.Projection{}}).Reconcile(ctx);err!=nil{t.Fatal(err)}
+	if _,err:=(Indexer{Store:s,Embedder:incompatibleEmbedder{}}).Reconcile(ctx);err==nil{t.Fatal("expected embedding model mismatch") } else if got:=err.Error();got==""{t.Fatal(fmt.Errorf("empty mismatch error"))}
 }
 
 func writeAt(t *testing.T,path,content string,mtime time.Time){t.Helper();if err:=os.WriteFile(path,[]byte(content),0o600);err!=nil{t.Fatal(err)};if err:=os.Chtimes(path,mtime,mtime);err!=nil{t.Fatal(err)}}

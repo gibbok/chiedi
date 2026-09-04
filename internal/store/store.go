@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -120,12 +121,26 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS documents_identity ON documents(root_id, file_identity)`,
 		`CREATE INDEX IF NOT EXISTS chunks_hash ON chunks(document_id, embedding_hash)`,
 	}
-	for _, statement := range statements {
+	// Establish metadata first so a newer database is rejected before this
+	// binary makes any schema changes or overwrites its version marker.
+	for _, statement := range statements[:5] {
 		if _, err := s.db.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("database migration: %w", err)
 		}
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, SchemaVersion)
+	version, err := s.Meta(ctx, "schema_version")
+	if err != nil { return err }
+	if version != "" {
+		parsed, err := strconv.Atoi(version)
+		if err != nil { return fmt.Errorf("invalid database schema version %q", version) }
+		if parsed > SchemaVersion { return fmt.Errorf("database schema version %d is newer than supported version %d", parsed, SchemaVersion) }
+	}
+	for _, statement := range statements[5:] {
+		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("database migration: %w", err)
+		}
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, SchemaVersion)
 	return err
 }
 
@@ -154,12 +169,14 @@ func (s *Store) RemoveRoot(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
+	canonical := filepath.Clean(abs)
+	if real, evalErr := filepath.EvalSymlinks(abs); evalErr == nil { canonical = filepath.Clean(real) }
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT c.id FROM chunks c JOIN documents d ON d.id=c.document_id JOIN roots r ON r.id=d.root_id WHERE r.path=?`, filepath.Clean(abs))
+	rows, err := tx.QueryContext(ctx, `SELECT c.id FROM chunks c JOIN documents d ON d.id=c.document_id JOIN roots r ON r.id=d.root_id WHERE r.path=?`, canonical)
 	if err != nil {
 		return err
 	}
@@ -178,7 +195,7 @@ func (s *Store) RemoveRoot(ctx context.Context, path string) error {
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM roots WHERE path=?`, filepath.Clean(abs)); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM roots WHERE path=?`, canonical); err != nil {
 		return err
 	}
 	return tx.Commit()

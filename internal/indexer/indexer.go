@@ -38,6 +38,12 @@ type Indexer struct {
 
 func (i Indexer) Reconcile(ctx context.Context) (Stats,error) {
 	if i.Store==nil||i.Embedder==nil{return Stats{},fmt.Errorf("store and embedder are required")}
+	storedModel,err:=i.Store.Meta(ctx,"embedding_model_id");if err!=nil{return Stats{},err}
+	storedDimensions,err:=i.Store.Meta(ctx,"embedding_dimensions");if err!=nil{return Stats{},err}
+	counts,err:=i.Store.Counts(ctx);if err!=nil{return Stats{},err}
+	if counts.Chunks>0&&storedModel==""{return Stats{},fmt.Errorf("existing vectors have no embedding model identity; reindex into a new database")}
+	if storedModel!=""&&storedModel!=i.Embedder.ID(){return Stats{},fmt.Errorf("index uses embedding model %q; configured model is %q: re-embedding is required",storedModel,i.Embedder.ID())}
+	if storedDimensions!=""&&storedDimensions!=fmt.Sprint(i.Embedder.Dimensions()){return Stats{},fmt.Errorf("index uses %s-dimensional embeddings; configured model uses %d: re-embedding is required",storedDimensions,i.Embedder.Dimensions())}
 	roots,err:=i.Store.Roots(ctx);if err!=nil{return Stats{},err}
 	stats:=Stats{}
 	for _,root:=range roots{
