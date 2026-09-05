@@ -19,6 +19,7 @@ import (
 	"github.com/gibbok/local-genius/internal/embedding"
 	"github.com/gibbok/local-genius/internal/extract"
 	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/local-genius/internal/source"
 )
 
 type Stats struct {
@@ -85,6 +86,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		stats.ScannedFiles++
 		rel,err:=filepath.Rel(root.Path,path);if err!=nil{return err};rel=filepath.ToSlash(rel)
 		info,err:=entry.Info();if err!=nil{rootHadWalkErrors=true;stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
+		if !info.Mode().IsRegular() { return nil }
 		identity:=fileIdentity(info)
 		old,found:=byPath[rel]
 		if !found&&identity!=""{if candidate,ok:=byIdentity[identity];ok&&!seen[candidate.ID]{old=candidate;found=true
@@ -145,4 +147,4 @@ func fileIdentity(info os.FileInfo)string{
 func value(v reflect.Value)any{switch v.Kind(){case reflect.Uint,reflect.Uint8,reflect.Uint16,reflect.Uint32,reflect.Uint64:return v.Uint();case reflect.Int,reflect.Int8,reflect.Int16,reflect.Int32,reflect.Int64:return v.Int()};return ""}
 func sameFileMetadata(document store.Document,info os.FileInfo,identity string)bool{if document.Size!=info.Size()||document.MtimeNS!=info.ModTime().UnixNano(){return false};return document.Identity==""||identity==""||document.Identity==identity}
 func validVector(v []float32,dimensions int)bool{if len(v)!=dimensions{return false};for _,x:=range v{if math.IsNaN(float64(x))||math.IsInf(float64(x),0){return false}};return true}
-func readFileBounded(path string,limit int64)([]byte,error){file,err:=os.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil}
+func readFileBounded(path string,limit int64)([]byte,error){file,err:=source.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil}

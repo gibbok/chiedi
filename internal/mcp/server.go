@@ -67,7 +67,7 @@ func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 	case "tools/call":
 		var call struct{Name string `json:"name"`;Arguments json.RawMessage `json:"arguments"`};if err:=decodeArgs(req.Params,&call);err!=nil||call.Name==""{return nil,&rpcError{-32602,"invalid tool parameters"}}
 		value,err:=s.call(ctx,call.Name,call.Arguments);if err!=nil{return map[string]any{"content":[]any{map[string]any{"type":"text","text":err.Error()}},"isError":true},nil}
-		encoded,_:=json.Marshal(value);return map[string]any{"content":[]any{map[string]any{"type":"text","text":string(encoded)}},"structuredContent":value,"isError":false},nil
+		structured,ok:=value.(map[string]any);if !ok { structured=map[string]any{"results":value} };encoded,_:=json.Marshal(structured);return map[string]any{"content":[]any{map[string]any{"type":"text","text":string(encoded)}},"structuredContent":structured,"isError":false},nil
 	default:return nil,&rpcError{-32601,"method not found"}
 	}
 }

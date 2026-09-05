@@ -11,7 +11,7 @@ Use `make demo` when you want to see the application working. Use `make test-all
 
 ## Prerequisites
 
-- Go 1.23 or newer
+- Go 1.25 or newer
 - GNU Make
 - Bash for the interactive demo
 - No C compiler is required; the SQLite driver is implemented in pure Go
@@ -85,7 +85,7 @@ This executes the following checks sequentially:
 
 The unit layer includes edge-case regressions for empty databases, owner-only database permissions, transactional rollback and restart recovery, concurrent SQLite writers, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only and same-timestamp file replacement, cross-format rename, unavailable roots, incomplete permission-constrained scans, symlink containment, cancellation during embedding, chunk overlap, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
 
-Retrieval also has a 50-case quality gate: 40 synonym/paraphrase cases that cannot be satisfied by exact lexical matching and 10 exact-identifier cases. Every expected source must rank first.
+Retrieval also has a 50-case quality gate: 40 curated-dictionary synonym regressions and 10 exact-identifier cases. Every expected source must rank first. These cases validate known mappings, not general semantic understanding. Separate multi-document fixtures exercise realistic questions without extending the synonym dictionary.
 
 ## End-to-end acceptance test
 
@@ -151,3 +151,9 @@ Remove `manual-test.db`, `manual-test.db-shm`, and `manual-test.db-wal` when the
 - `embedding_jobs` must be zero after a pure rename or unchanged reconciliation.
 - After a one-chunk edit, the tests require only the affected chunk to be embedded.
 - Any race-detector, vet, build, protocol, or acceptance failure blocks completion.
+
+## Pre-review regressions
+
+The suite verifies SQLite-vec availability and filtered nearest neighbors (including a relevant source outside the global top 40), vector cleanup on rename/delete/root removal, dimension rejection and rollback, schema-1 migration, non-reused chunk IDs, a writer committing during a retrieval snapshot, FIFO exclusion, MCP object-shaped structured content, and stale references between tool calls. The real-binary MCP check asserts every tool succeeds and returns an object, in addition to checking protocol framing.
+
+SQLite-vec remains an exact scan. The document fixtures are regression evidence, not a general semantic benchmark or a corpus-scale latency guarantee.

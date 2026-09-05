@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"rsc.io/pdf"
+	"github.com/gibbok/local-genius/internal/source"
 )
 
 const (
@@ -40,6 +41,7 @@ func File(ctx context.Context, path string) (Document, error) {
 	if err != nil {
 		return Document{}, err
 	}
+	if !info.Mode().IsRegular() { return Document{}, errors.New("source is not a regular file") }
 	if info.Size() > MaxFileBytes {
 		return Document{}, fmt.Errorf("file exceeds %d-byte limit", MaxFileBytes)
 	}
@@ -124,7 +126,7 @@ func markdownFile(path string) (Document, error) {
 }
 
 func readFileBounded(path string,limit int64)([]byte,error){
-	file,err:=os.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil
+	file,err:=source.Open(path);if err!=nil{return nil,err};defer file.Close();data,err:=io.ReadAll(io.LimitReader(file,limit+1));if err!=nil{return nil,err};if int64(len(data))>limit{return nil,fmt.Errorf("file exceeds %d-byte limit",limit)};return data,nil
 }
 
 func markdownHeading(line string) (int, string) {
@@ -141,7 +143,9 @@ func markdownHeading(line string) (int, string) {
 
 func pdfFile(ctx context.Context, path string) (doc Document, err error) {
 	defer func(){if recovered:=recover();recovered!=nil{doc=Document{};err=fmt.Errorf("parse PDF: parser panic: %v",recovered)}}()
-	r, err := pdf.Open(path)
+	file,err:=source.Open(path);if err!=nil{return Document{},err};defer file.Close()
+	info,err:=file.Stat();if err!=nil{return Document{},err}
+	r, err := pdf.NewReader(file,info.Size())
 	if err != nil {
 		return Document{}, fmt.Errorf("parse PDF: %w", err)
 	}

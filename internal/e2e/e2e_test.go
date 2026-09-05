@@ -55,7 +55,9 @@ func testMCP(t *testing.T,binary,db string){
 	}
 	for _,line:=range requests{fmt.Fprintln(stdin,line)};stdin.Close();scanner:=bufio.NewScanner(stdout);var responses []map[string]any;for scanner.Scan(){var response map[string]any;if err:=json.Unmarshal(scanner.Bytes(),&response);err!=nil{t.Fatalf("MCP stdout is not JSON: %q",scanner.Text())};responses=append(responses,response)}
 	if err:=cmd.Wait();err!=nil{t.Fatalf("MCP exit: %v stderr=%s",err,stderr.String())};if len(responses)!=len(requests)-1{t.Fatalf("MCP responses=%d want=%d; initialized notification must not receive a response; stderr=%s",len(responses),len(requests)-1,stderr.String())}
-	for n,response:=range responses{if response["error"]!=nil{t.Fatalf("MCP response %d: %+v",n,response)}}
+	for n,response:=range responses{if response["error"]!=nil{t.Fatalf("MCP response %d: %+v",n,response)}
+ if n>=3 {result,ok:=response["result"].(map[string]any);if !ok||result["isError"]!=false{t.Fatalf("MCP tool %d failed: %+v",n,response)};if _,ok:=result["structuredContent"].(map[string]any);!ok{t.Fatalf("MCP structuredContent must be an object: %+v",response)}}
+ }
 	encoded,_:=json.Marshal(responses);text:=string(encoded);for _,required:=range []string{"retrieve","read_chunks","list_documents","index_status","hr.md","root_path","root_id"}{if !strings.Contains(text,required){t.Fatalf("MCP output missing %q: %s",required,text)}}
 }
 

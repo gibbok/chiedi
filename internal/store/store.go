@@ -14,9 +14,10 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite/vec"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type Store struct {
 	db   *sql.DB
@@ -122,7 +123,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			content_hash BLOB, format TEXT NOT NULL, indexed_at INTEGER, status TEXT NOT NULL, error TEXT,
 			UNIQUE(root_id, relative_path), FOREIGN KEY(root_id) REFERENCES roots(id) ON DELETE CASCADE)`,
 		`CREATE TABLE IF NOT EXISTS chunks (
-			id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL, ordinal INTEGER NOT NULL,
+			id INTEGER PRIMARY KEY AUTOINCREMENT, document_id INTEGER NOT NULL, ordinal INTEGER NOT NULL,
 			page_start INTEGER, page_end INTEGER, heading TEXT, text TEXT NOT NULL,
 			embedding_hash BLOB NOT NULL, embedding BLOB NOT NULL,
 			UNIQUE(document_id, ordinal), FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE)`,
@@ -149,6 +150,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("database migration: %w", err)
 		}
 	}
+	if err := s.migrateVectors(ctx, version); err != nil { return err }
 	_, err = s.db.ExecContext(ctx, `INSERT INTO meta(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, SchemaVersion)
 	return err
 }
@@ -200,7 +202,7 @@ func (s *Store) RemoveRoot(ctx context.Context, path string) error {
 	}
 	rows.Close()
 	for _, id := range ids {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM chunks_fts WHERE rowid=?`, id); err != nil {
+		if err := deleteVector(ctx, tx, id); err != nil { return err };if _, err := tx.ExecContext(ctx, `DELETE FROM chunks_fts WHERE rowid=?`, id); err != nil {
 			return err
 		}
 	}
@@ -261,8 +263,12 @@ func (s *Store) AllChunks(ctx context.Context, pathPrefix string) ([]Chunk, erro
 }
 
 func (s *Store) queryChunks(ctx context.Context, suffix string, args ...any) ([]Chunk, error) {
+	return queryChunksWith(ctx,s.db,suffix,args...)
+}
+
+func queryChunksWith(ctx context.Context, reader sqlReader, suffix string, args ...any) ([]Chunk,error) {
 	q := `SELECT c.id,c.document_id,d.root_id,r.path,c.ordinal,d.relative_path,COALESCE(c.heading,''),COALESCE(c.page_start,0),COALESCE(c.page_end,0),c.text,c.embedding_hash,c.embedding FROM chunks c JOIN documents d ON d.id=c.document_id JOIN roots r ON r.id=d.root_id `+suffix
-	rows, err := s.db.QueryContext(ctx,q,args...)
+	rows, err := reader.QueryContext(ctx,q,args...)
 	if err != nil { return nil,err }
 	defer rows.Close()
 	out := make([]Chunk,0)
@@ -280,6 +286,7 @@ func (s *Store) ReplaceDocument(ctx context.Context, replacement Replacement) (i
 	tx, err := s.db.BeginTx(ctx,nil)
 	if err != nil { return 0,err }
 	defer tx.Rollback()
+	if len(replacement.Chunks)>0 { if err := ensureVectors(ctx,tx,len(replacement.Chunks[0].Vector)); err != nil { return 0,err } }
 	var documentID int64
 	err = tx.QueryRowContext(ctx, `SELECT id FROM documents WHERE root_id=? AND relative_path=?`, replacement.RootID,replacement.RelativePath).Scan(&documentID)
 	if err != nil && !errors.Is(err,sql.ErrNoRows) { return 0,err }
@@ -292,13 +299,14 @@ func (s *Store) ReplaceDocument(ctx context.Context, replacement Replacement) (i
 		var ids []int64
 		for rows.Next(){var id int64;if err:=rows.Scan(&id);err!=nil{rows.Close();return 0,err};ids=append(ids,id)}
 		rows.Close()
-		for _,id:=range ids{if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,id);err!=nil{return 0,err}}
+		for _,id:=range ids{if err := deleteVector(ctx, tx, id); err != nil { return 0,err };if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,id);err!=nil{return 0,err}}
 		if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks WHERE document_id=?`,documentID);err!=nil{return 0,err}
 		if _,err:=tx.ExecContext(ctx, `UPDATE documents SET file_identity=?,size_bytes=?,mtime_ns=?,content_hash=?,format=?,indexed_at=?,status=?,error=? WHERE id=?`, replacement.Identity,replacement.Size,replacement.MtimeNS,replacement.ContentHash,replacement.Format,time.Now().UnixNano(),replacement.Status,replacement.Error,documentID);err!=nil{return 0,err}
 	}
 	for _,c:=range replacement.Chunks{
 		res,err:=tx.ExecContext(ctx,`INSERT INTO chunks(document_id,ordinal,page_start,page_end,heading,text,embedding_hash,embedding) VALUES(?,?,?,?,?,?,?,?)`,documentID,c.Ordinal,nullInt(c.PageStart),nullInt(c.PageEnd),c.Heading,c.Text,c.EmbeddingHash,encodeVector(c.Vector));if err!=nil{return 0,err}
 		id,err:=res.LastInsertId();if err!=nil{return 0,err}
+		if err := validateVector(c.Vector); err != nil { return 0,err }; if _,err:=tx.ExecContext(ctx,`INSERT INTO chunks_vec(rowid,embedding) VALUES(?,?)`,id,encodeVector(c.Vector));err!=nil{return 0,err}
 		if _,err:=tx.ExecContext(ctx,`INSERT INTO chunks_fts(rowid,text,heading,path) VALUES(?,?,?,?)`,id,c.Text,c.Heading,replacement.RelativePath);err!=nil{return 0,err}
 	}
 	if err:=tx.Commit();err!=nil{return 0,err}
@@ -323,18 +331,22 @@ func (s *Store) DeleteDocument(ctx context.Context,id int64) error {
 	tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
 	rows,err:=tx.QueryContext(ctx,`SELECT id FROM chunks WHERE document_id=?`,id);if err!=nil{return err};var ids []int64
 	for rows.Next(){var n int64;if err:=rows.Scan(&n);err!=nil{rows.Close();return err};ids=append(ids,n)};rows.Close()
-	for _,n:=range ids{if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,n);err!=nil{return err}}
+	for _,n:=range ids{if err := deleteVector(ctx, tx, n); err != nil { return err };if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,n);err!=nil{return err}}
 	if _,err:=tx.ExecContext(ctx,`DELETE FROM documents WHERE id=?`,id);err!=nil{return err}
 	return tx.Commit()
 }
 
 func (s *Store) SearchFTS(ctx context.Context, query, pathPrefix string, limit int) ([]int64,error) {
+	return searchFTS(ctx,s.db,query,pathPrefix,limit)
+}
+
+func searchFTS(ctx context.Context,reader sqlReader,query,pathPrefix string,limit int)([]int64,error){
 	if strings.TrimSpace(query)=="" { return []int64{},nil }
 	q:=`SELECT f.rowid FROM chunks_fts f JOIN chunks c ON c.id=f.rowid JOIN documents d ON d.id=c.document_id WHERE chunks_fts MATCH ?`
 	args:=[]any{query}
 	if pathPrefix!=""{q+=` AND instr(d.relative_path,?)=1`;args=append(args,normalizedPrefix(pathPrefix))}
 	q+=` ORDER BY bm25(chunks_fts) LIMIT ?`;args=append(args,limit)
-	rows,err:=s.db.QueryContext(ctx,q,args...);if err!=nil{return nil,err};defer rows.Close();ids:=make([]int64,0)
+	rows,err:=reader.QueryContext(ctx,q,args...);if err!=nil{return nil,err};defer rows.Close();ids:=make([]int64,0)
 	for rows.Next(){var id int64;if err:=rows.Scan(&id);err!=nil{return nil,err};ids=append(ids,id)}
 	return ids,rows.Err()
 }
@@ -343,7 +355,7 @@ func (s *Store) ReadChunks(ctx context.Context, ids []int64, before, after int) 
 	seen:=map[int64]bool{};out:=make([]Chunk,0)
 	for _,id:=range ids{
 		var docID int64;var ordinal int
-		if err:=s.db.QueryRowContext(ctx,`SELECT document_id,ordinal FROM chunks WHERE id=?`,id).Scan(&docID,&ordinal);err!=nil{if errors.Is(err,sql.ErrNoRows){continue};return nil,err}
+		if err:=s.db.QueryRowContext(ctx,`SELECT document_id,ordinal FROM chunks WHERE id=?`,id).Scan(&docID,&ordinal);err!=nil{if errors.Is(err,sql.ErrNoRows){return nil,fmt.Errorf("chunk %d is stale or missing; retrieve again",id)};return nil,err}
 		chunks,err:=s.queryChunks(ctx,`WHERE c.document_id=? AND c.ordinal BETWEEN ? AND ? ORDER BY c.ordinal`,docID,ordinal-before,ordinal+after);if err!=nil{return nil,err}
 		for _,c:=range chunks{if !seen[c.ID]{seen[c.ID]=true;out=append(out,c)}}
 	}
@@ -372,7 +384,8 @@ func (s *Store) IndexIntegrityCheck(ctx context.Context,dimensions int)error{
 	for _,check:=range checks{var count int;if err:=s.db.QueryRowContext(ctx,check.query,check.args...).Scan(&count);err!=nil{return err};if count!=0{return fmt.Errorf("index integrity: %d %s",count,check.name)}}
 	rows,err:=s.db.QueryContext(ctx,`SELECT id,embedding FROM chunks`);if err!=nil{return err};defer rows.Close()
 	for rows.Next(){var id int64;var raw []byte;if err:=rows.Scan(&id,&raw);err!=nil{return err};for _,x:=range decodeVector(raw){if math.IsNaN(float64(x))||math.IsInf(float64(x),0){return fmt.Errorf("index integrity: chunk %d has a non-finite vector value",id)}}}
-	return rows.Err()
+	if err:=rows.Err();err!=nil{return err}; rows.Close()
+	return s.vectorIntegrity(ctx)
 }
 
 func normalizedPrefix(prefix string)string{return strings.ReplaceAll(prefix,`\`,`/`)}

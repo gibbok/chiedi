@@ -45,7 +45,7 @@ func TestEmptyCollectionsEncodeAsArrays(t *testing.T){
 	roots,err:=s.Roots(ctx);if err!=nil{t.Fatal(err)};values=append(values,roots)
 	documents,err:=s.ListDocuments(ctx,"","","");if err!=nil{t.Fatal(err)};values=append(values,documents)
 	chunks,err:=s.AllChunks(ctx,"");if err!=nil{t.Fatal(err)};values=append(values,chunks)
-	read,err:=s.ReadChunks(ctx,[]int64{999},0,0);if err!=nil{t.Fatal(err)};values=append(values,read)
+	read,err:=s.ReadChunks(ctx,nil,0,0);if err!=nil{t.Fatal(err)};values=append(values,read)
 	ids,err:=s.SearchFTS(ctx," ","",10);if err!=nil{t.Fatal(err)};values=append(values,ids)
 	for n,value:=range values{encoded,err:=json.Marshal(value);if err!=nil{t.Fatal(err)};if string(encoded)!="[]"{t.Fatalf("collection %d encoded as %s",n,encoded)}}
 }

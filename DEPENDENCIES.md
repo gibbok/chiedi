@@ -1,25 +1,8 @@
 # Dependencies
 
-## modernc.org/sqlite
+- `modernc.org/sqlite v1.58.0`: pure-Go SQLite driver with FTS5 and bundled `modernc.org/sqlite/vec` (SQLite-vec). Keeps metadata, lexical data and vectors in one transactional database without CGo or an external service. The SQLite-vec code is MIT-licensed, SQLite is public domain, and the Go wrapper is BSD-3-Clause; upstream notices must accompany redistributed source. See https://pkg.go.dev/modernc.org/sqlite/vec.
+- `rsc.io/pdf v0.1.1`: BSD-licensed text-layer PDF parser. No OCR or external command dependency.
 
-- Repository: https://gitlab.com/cznic/sqlite
-- Version: v1.36.3
-- License: BSD-3-Clause
-- Purpose: Pure-Go SQLite driver with FTS5 support.
-- Why not stdlib/custom: Go's standard library has no SQLite driver; implementing a database is unsafe and out of scope.
-- Linking: Static Go dependency; no system SQLite library is required.
-- Runtime/network: No runtime service and no network access.
-- Security: Database paths are local and queries are parameterized.
-- Replacement: The store boundary permits a different SQLite driver later.
+Transitive packages are recorded by `go mod tidy` in `go.mod` and checked by `go.sum`. They support the pure-Go SQLite runtime and its platform abstractions. The first build downloads modules; document processing is offline thereafter.
 
-## rsc.io/pdf
-
-- Repository: https://github.com/rsc/pdf
-- Version: v0.1.1
-- License: BSD-3-Clause
-- Purpose: Extract text and page provenance from text-layer PDFs.
-- Why not stdlib/custom: PDF parsing is complex and security-sensitive; Go has no standard parser.
-- Linking: Static Go dependency.
-- Runtime/network: No runtime service and no network access.
-- Security: Input size/page/text limits are enforced before indexing.
-- Replacement: The extractor interface permits replacement after parser benchmarks.
+The built-in embedding implementation uses the standard library and a curated English synonym dictionary. It does not download or bundle trained model weights.
