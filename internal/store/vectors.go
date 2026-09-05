@@ -105,7 +105,7 @@ func candidatesInSnapshot(ctx context.Context,tx *sql.Tx,vector []float32,query,
    q:=`SELECT rowid,distance FROM chunks_vec WHERE embedding MATCH ? AND k=?`
    args:=[]any{encodeVector(vector),limit}
    if prefix!="" {q+=` AND rowid IN (SELECT c.id FROM chunks c JOIN documents d ON d.id=c.document_id WHERE instr(d.relative_path,?)=1)`;args=append(args,normalizedPrefix(prefix))}
-   q+=` ORDER BY distance,rowid`
+   q+=` ORDER BY distance`
    rows,err:=tx.QueryContext(ctx,q,args...);if err!=nil{return nil,err}
    rank:=0
    for rows.Next(){var id int64;var distance sql.NullFloat64;if err:=rows.Scan(&id,&distance);err!=nil{rows.Close();return nil,err};if !distance.Valid||math.IsNaN(distance.Float64)||distance.Float64>=1{continue};rank++;candidates[id]=&Candidate{VectorRank:rank,VectorScore:1-distance.Float64}}
