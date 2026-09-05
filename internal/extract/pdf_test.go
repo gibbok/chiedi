@@ -23,6 +23,75 @@ import (
 	"github.com/klippa-app/go-pdfium/responses"
 )
 
+func TestPDFStampPageIsNotSilentlyOmitted(t *testing.T) {
+	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("PATH", t.TempDir())
+	path := writeStampPDF(t)
+	doc, err := File(context.Background(), path)
+	if err == nil || !strings.Contains(err.Error(), "PDF page 2") || !strings.Contains(err.Error(), "enable local OCR") {
+		t.Fatalf("visible stamp was silently omitted: document=%+v, err=%v", doc, err)
+	}
+	if len(doc.Sections) != 0 {
+		t.Fatal("returned partial PDF")
+	}
+}
+
+func TestPDFStampLocalOCR(t *testing.T) {
+	if os.Getenv("DOCDEX_TEST_OCR") != "1" {
+		t.Skip("DOCDEX_TEST_OCR=1 requires real stamp OCR")
+	}
+	t.Setenv("DOCDEX_PDF_OCR", "auto")
+	t.Setenv("DOCDEX_OCR_LANG", "eng")
+	doc, err := File(context.Background(), writeStampPDF(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Sections) != 2 || doc.Sections[1].PageStart != 2 || !strings.Contains(doc.Sections[1].Text, "APPROVED CONTRACT") {
+		t.Fatalf("stamp text/provenance missing: %+v", doc)
+	}
+}
+
+func TestPDFHiddenStampRemainsHidden(t *testing.T) {
+	t.Setenv("DOCDEX_PDF_OCR", "auto")
+	t.Setenv("PATH", t.TempDir())
+	path := writeStampPDF(t)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The replacement has the same length, so the PDF cross-reference offsets
+	// remain valid. Annotation flag 2 means hidden.
+	data = bytes.ReplaceAll(data, []byte("/F 4 /AP"), []byte("/F 2 /AP"))
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := File(context.Background(), path)
+	if err != nil || len(doc.Sections) != 1 || doc.Sections[0].PageStart != 1 {
+		t.Fatalf("hidden annotation became visible content: %+v, %v", doc, err)
+	}
+}
+
+func writeStampPDF(t *testing.T) string {
+	t.Helper()
+	cover := "BT /F1 12 Tf 72 720 Td (Digital cover.) Tj ET"
+	stamp := "BT /F1 24 Tf 10 40 Td (APPROVED CONTRACT) Tj ET"
+	data := testPDFObjects([]string{
+		"<< /Type /Catalog /Pages 2 0 R >>",
+		"<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 6 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [7 0 R] >>",
+		fmt.Sprintf("<< /Length %d >>\nstream\n%s\nendstream", len(cover), cover),
+		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+		"<< /Type /Annot /Subtype /Stamp /Rect [72 600 532 700] /F 4 /AP << /N 8 0 R >> >>",
+		fmt.Sprintf("<< /Type /XObject /Subtype /Form /BBox [0 0 460 100] /Resources << /Font << /F1 6 0 R >> >> /Length %d >>\nstream\n%s\nendstream", len(stamp), stamp),
+	})
+	path := filepath.Join(t.TempDir(), "stamp.pdf")
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestPDFPaintedBlankPage(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	blankScan := image.NewRGBA(image.Rect(0, 0, 1224, 1584))

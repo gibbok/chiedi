@@ -132,8 +132,16 @@ func pdfPage(ctx context.Context, instance pdfium.Pdfium, page requests.Page, op
 		return "", err
 	}
 	if objects.Count == 0 {
-		return "", nil
-	} // Preserve blank-page numbering.
+		// Annotation appearances (for example approval stamps) are visible
+		// content but are not included in the normal page-object count.
+		annotations, err := instance.FPDFPage_GetAnnotCount(&requests.FPDFPage_GetAnnotCount{Page: page})
+		if err != nil {
+			return "", err
+		}
+		if annotations.Count == 0 {
+			return "", nil
+		}
+	}
 	return ocrPDFPage(ctx, instance, page, options)
 }
 

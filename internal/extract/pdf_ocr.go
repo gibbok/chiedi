@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/klippa-app/go-pdfium"
+	"github.com/klippa-app/go-pdfium/enums"
 	"github.com/klippa-app/go-pdfium/requests"
 )
 
@@ -38,7 +39,10 @@ func ocrPDFPage(ctx context.Context, instance pdfium.Pdfium, page requests.Page,
 		return "", err
 	}
 	// A pixel box bounds raster memory even for pathological PDF page sizes.
-	rendered, err := instance.RenderPageInPixels(&requests.RenderPageInPixels{Page: page, Width: 2400, Height: 3200})
+	rendered, err := instance.RenderPageInPixels(&requests.RenderPageInPixels{
+		Page: page, Width: 2400, Height: 3200,
+		RenderFlags: enums.FPDF_RENDER_FLAG_ANNOT,
+	})
 	if err != nil {
 		return "", fmt.Errorf("render for OCR: %w", err)
 	}

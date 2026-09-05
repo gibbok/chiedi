@@ -24,7 +24,11 @@ graphics and blank scan images, without requiring Tesseract. This check uses no
 color tolerance, so faint marks are not treated as blank; noisy blank scans may
 still require OCR. Missing OCR tools, missing language data, or unreadable nonblank pages
 fail the document with a page-specific error instead of silently indexing only
-part of it. Other documents remain indexable.
+part of it. Other documents remain indexable. OCR rendering includes visible
+non-interactive annotations such as approval stamps; annotation-only pages are
+not treated as empty. Interactive form widgets and popup comments are not
+included by this rendering flag. As with images beside valid digital text, use
+`always` when a stamp must be read on a page that already has a usable text layer.
 
 Install Tesseract before indexing scans:
 
