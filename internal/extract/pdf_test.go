@@ -238,11 +238,18 @@ func TestPDFCancellationAndPoolWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	if _, err := File(ctx, path); err == nil {
-		t.Fatal("expected canceled pool acquisition")
+	if _, err := File(ctx, path); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("pool acquisition must preserve the caller's deadline error: %v", err)
 	}
 	if time.Since(start) > time.Second {
 		t.Fatal("pool did not honor cancellation")
+	}
+	waiting, cancelWaiting := context.WithCancel(context.Background())
+	defer cancelWaiting()
+	timer := time.AfterFunc(20*time.Millisecond, cancelWaiting)
+	defer timer.Stop()
+	if _, err := File(waiting, path); !errors.Is(err, context.Canceled) {
+		t.Fatalf("pool acquisition must preserve explicit cancellation: %v", err)
 	}
 	cancelled, cancelNow := context.WithCancel(context.Background())
 	cancelNow()

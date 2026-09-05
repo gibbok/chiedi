@@ -52,6 +52,11 @@ func pdfFile(ctx context.Context, path string) (doc Document, err error) {
 	}
 	instance, err := pdfRuntime.pool.GetInstanceWithContext(ctx)
 	if err != nil {
+		// The pool replaces context cancellation with its own timeout error.
+		// Preserve the caller's error identity for errors.Is and cancellation handling.
+		if ctx.Err() != nil {
+			return Document{}, ctx.Err()
+		}
 		return Document{}, fmt.Errorf("acquire PDFium: %w", err)
 	}
 	defer instance.Close()

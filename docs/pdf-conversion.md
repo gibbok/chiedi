@@ -107,3 +107,27 @@ PDF decoding, page provenance, missing OCR, malformed files, limits, and
 cancellation regressions still run. The complete gates retain all existing CLI,
 MCP, indexing, SQLite-vec, retrieval, race, vet, and reconciliation checks.
 CI installs Tesseract and requires the real OCR acceptance case in both gates.
+
+The compiled-binary PDF E2E test generates valid digital PDFs and mixed PDFs
+with actual JPEG scan images in temporary directories. It exercises CLI indexing
+and search, MCP retrieval and `read_chunks`, original page-3 citations after a
+blank page, malformed-document isolation, and a changed scan whose new OCR text
+is indexed while the unchanged digital cover reuses its embedding. It also
+checks no work is repeated on unchanged files and runs the database health check.
+
+To include the independently authored W3C PDF test sample in that same E2E run:
+
+```sh
+mkdir -p temp/public-pdfs
+curl -fL https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf \
+  -o temp/public-pdfs/w3c-dummy.pdf
+DOCDEX_TEST_OCR=1 \
+DOCDEX_TEST_PUBLIC_PDF="$PWD/temp/public-pdfs/w3c-dummy.pdf" \
+  go test -v -count=1 ./internal/e2e -run TestBuiltBinaryPDFConversion
+```
+
+`DOCDEX_TEST_PUBLIC_PDF` specifically expects that sample (containing “Dummy PDF
+file”). The E2E test copies it to its temporary corpus and verifies retrieval.
+Only the explicit `curl` command accesses the network; tests and application
+processing remain offline, and CI uses generated PDFs without requiring W3C
+availability. Neither downloaded nor generated PDF files should be committed.
