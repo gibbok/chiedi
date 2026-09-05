@@ -55,7 +55,7 @@ Use `--db PATH` before the command, or set `DOCDEX_DB`. The default is `docdex.d
 
 ## Limits
 
-V1 indexes UTF-8 text, Markdown, and PDFs with an extractable text layer. It does not perform OCR. The built-in embedder uses deterministic feature hashing, stemming, and a curated English synonym dictionary. It is not a trained language model and does not provide general semantic understanding. The `embedding.Embedder` interface permits a future local model.
+V1 indexes UTF-8 text, Markdown, and PDFs. PDFium handles PDF text decoding and word spacing; optional local Tesseract OCR reads scanned pages while preserving page citations. See [PDF conversion](docs/pdf-conversion.md) for installation, language settings, limits, and upgrading an existing index. The built-in embedder uses deterministic feature hashing, stemming, and a curated English synonym dictionary. It is not a trained language model and does not provide general semantic understanding. The `embedding.Embedder` interface permits a future local model.
 
 Embedding model identities are stored with the index. If an upgrade changes the projection algorithm, `docdex` rejects the older vectors instead of mixing incompatible embeddings. Rebuild into a new database, or remove the old database and run `init`, `add`, and `index` again.
 

@@ -12,6 +12,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DOCDEX_TEST_OCR: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -22,6 +24,8 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum || { cat go.mod; cat go.sum; exit 1; }
+      - name: Install local PDF OCR test dependency
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
       - run: make verify
       - run: make verify-full
       - name: Verify standalone pure-Go build
