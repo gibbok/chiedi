@@ -133,3 +133,11 @@ func (s *Store) vectorIntegrity(ctx context.Context)error{
  }{var count int;if err:=s.db.QueryRowContext(ctx,q).Scan(&count);err!=nil{return err};if count>0{return fmt.Errorf("vector index inconsistent: %d rows",count)}}
  return nil
 }
+
+// Obtain the write lock before reading a snapshot that will be modified. This
+// avoids an un-retryable WAL snapshot upgrade when another writer commits.
+func (s *Store) beginWrite(ctx context.Context)(*sql.Tx,error){
+ tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return nil,err}
+ if _,err:=tx.ExecContext(ctx,`UPDATE meta SET value=value WHERE key='schema_version'`);err!=nil{tx.Rollback();return nil,err}
+ return tx,nil
+}

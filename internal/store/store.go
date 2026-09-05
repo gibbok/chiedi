@@ -182,7 +182,7 @@ func (s *Store) RemoveRoot(ctx context.Context, path string) error {
 	}
 	canonical := filepath.Clean(abs)
 	if real, evalErr := filepath.EvalSymlinks(abs); evalErr == nil { canonical = filepath.Clean(real) }
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func queryChunksWith(ctx context.Context, reader sqlReader, suffix string, args 
 }
 
 func (s *Store) ReplaceDocument(ctx context.Context, replacement Replacement) (int64, error) {
-	tx, err := s.db.BeginTx(ctx,nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil { return 0,err }
 	defer tx.Rollback()
 	if len(replacement.Chunks)>0 { if err := ensureVectors(ctx,tx,len(replacement.Chunks[0].Vector)); err != nil { return 0,err } }
@@ -316,7 +316,7 @@ func (s *Store) ReplaceDocument(ctx context.Context, replacement Replacement) (i
 func nullInt(v int) any { if v==0{return nil};return v }
 
 func (s *Store) RenameDocument(ctx context.Context, id int64, relativePath, identity string, size, mtime int64) error {
-	tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
+	tx,err:=s.beginWrite(ctx);if err!=nil{return err};defer tx.Rollback()
 	if _,err:=tx.ExecContext(ctx,`UPDATE documents SET relative_path=?,file_identity=?,size_bytes=?,mtime_ns=? WHERE id=?`,relativePath,identity,size,mtime,id);err!=nil{return err}
 	rows,err:=tx.QueryContext(ctx,`SELECT id,text,COALESCE(heading,'') FROM chunks WHERE document_id=?`,id);if err!=nil{return err}
 	type row struct{id int64;text,heading string};var data []row
@@ -328,7 +328,7 @@ func (s *Store) RenameDocument(ctx context.Context, id int64, relativePath, iden
 func (s *Store) UpdateDocumentMetadata(ctx context.Context,id int64,identity string,size,mtime int64)error{_,err:=s.db.ExecContext(ctx,`UPDATE documents SET file_identity=?,size_bytes=?,mtime_ns=? WHERE id=?`,identity,size,mtime,id);return err}
 
 func (s *Store) DeleteDocument(ctx context.Context,id int64) error {
-	tx,err:=s.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
+	tx,err:=s.beginWrite(ctx);if err!=nil{return err};defer tx.Rollback()
 	rows,err:=tx.QueryContext(ctx,`SELECT id FROM chunks WHERE document_id=?`,id);if err!=nil{return err};var ids []int64
 	for rows.Next(){var n int64;if err:=rows.Scan(&n);err!=nil{rows.Close();return err};ids=append(ids,n)};rows.Close()
 	for _,n:=range ids{if err := deleteVector(ctx, tx, n); err != nil { return err };if _,err:=tx.ExecContext(ctx,`DELETE FROM chunks_fts WHERE rowid=?`,n);err!=nil{return err}}
@@ -352,11 +352,12 @@ func searchFTS(ctx context.Context,reader sqlReader,query,pathPrefix string,limi
 }
 
 func (s *Store) ReadChunks(ctx context.Context, ids []int64, before, after int) ([]Chunk,error) {
+	tx,err:=s.db.BeginTx(ctx,&sql.TxOptions{ReadOnly:true});if err!=nil{return nil,err};defer tx.Rollback()
 	seen:=map[int64]bool{};out:=make([]Chunk,0)
 	for _,id:=range ids{
 		var docID int64;var ordinal int
-		if err:=s.db.QueryRowContext(ctx,`SELECT document_id,ordinal FROM chunks WHERE id=?`,id).Scan(&docID,&ordinal);err!=nil{if errors.Is(err,sql.ErrNoRows){return nil,fmt.Errorf("chunk %d is stale or missing; retrieve again",id)};return nil,err}
-		chunks,err:=s.queryChunks(ctx,`WHERE c.document_id=? AND c.ordinal BETWEEN ? AND ? ORDER BY c.ordinal`,docID,ordinal-before,ordinal+after);if err!=nil{return nil,err}
+		if err:=tx.QueryRowContext(ctx,`SELECT document_id,ordinal FROM chunks WHERE id=?`,id).Scan(&docID,&ordinal);err!=nil{if errors.Is(err,sql.ErrNoRows){return nil,fmt.Errorf("chunk %d is stale or missing; retrieve again",id)};return nil,err}
+		chunks,err:=queryChunksWith(ctx,tx,`WHERE c.document_id=? AND c.ordinal BETWEEN ? AND ? ORDER BY c.ordinal`,docID,ordinal-before,ordinal+after);if err!=nil{return nil,err}
 		for _,c:=range chunks{if !seen[c.ID]{seen[c.ID]=true;out=append(out,c)}}
 	}
 	return out,nil

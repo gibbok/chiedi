@@ -74,3 +74,12 @@ func TestVectorCorruptionAndDimensionMismatch(t *testing.T){
  chunks,_:=s.ChunksForDocument(ctx,id);if _,err:=s.db.Exec(`DELETE FROM chunks_vec WHERE rowid=?`,chunks[0].ID);err!=nil{t.Fatal(err)}
  if err:=s.IndexIntegrityCheck(ctx,2);err==nil{t.Fatal("missing vector undetected")}
 }
+
+func TestConcurrentDocumentWriters(t *testing.T){
+ ctx,s,r:=vectorStore(t);other,err:=Open(ctx,s.Path());if err!=nil{t.Fatal(err)};defer other.Close()
+ done:=make(chan error,2)
+ for n,target:=range []*Store{s,other}{go func(n int,target *Store){for j:=0;j<8;j++{copy:=r;copy.RelativePath=fmt.Sprintf("writer-%d-%d.txt",n,j);if _,err:=target.ReplaceDocument(ctx,copy);err!=nil{done<-err;return}};done<-nil}(n,target)}
+ for n:=0;n<2;n++{if err:=<-done;err!=nil{t.Fatal(err)}}
+ counts,err:=s.Counts(ctx);if err!=nil||counts.Chunks!=16{t.Fatalf("lost writes: %+v %v",counts,err)}
+ if err:=s.IndexIntegrityCheck(ctx,2);err!=nil{t.Fatal(err)}
+}
