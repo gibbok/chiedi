@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"image/png"
 	"os"
 	"os/exec"
@@ -36,21 +37,49 @@ func ocrPDFPage(ctx context.Context, instance pdfium.Pdfium, page requests.Page,
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	executable, err := exec.LookPath("tesseract")
-	if err != nil {
-		return "", errors.New("page requires OCR: install Tesseract and its language data, or supply a searchable PDF")
-	}
 	// A pixel box bounds raster memory even for pathological PDF page sizes.
 	rendered, err := instance.RenderPageInPixels(&requests.RenderPageInPixels{Page: page, Width: 2400, Height: 3200})
 	if err != nil {
 		return "", fmt.Errorf("render for OCR: %w", err)
 	}
 	defer rendered.Cleanup()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	// Scanners and PDF writers can encode an empty page as an image or a
+	// white rectangle. Object count alone does not prove there is content.
+	if blankPDFRaster(rendered.Result.Image) {
+		return "", nil
+	}
+	if options.mode == "off" {
+		return "", errors.New("page has no usable text layer; enable local OCR with DOCDEX_PDF_OCR=auto")
+	}
+	executable, err := exec.LookPath("tesseract")
+	if err != nil {
+		return "", errors.New("page requires OCR: install Tesseract and its language data, or supply a searchable PDF")
+	}
 	var input bytes.Buffer
 	if err := png.Encode(&input, rendered.Result.Image); err != nil {
 		return "", fmt.Errorf("encode OCR image: %w", err)
 	}
 	return runTesseract(ctx, executable, &input, options.language)
+}
+
+func blankPDFRaster(img *image.RGBA) bool {
+	if img == nil || img.Bounds().Empty() {
+		return false
+	}
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		row := img.Pix[y*img.Stride : y*img.Stride+img.Bounds().Dx()*4]
+		for x := 0; x < len(row); x += 4 {
+			// RGBA channels are premultiplied. White or transparent pixels
+			// become exactly white on paper. No tolerance that could hide faint text.
+			if row[x] != row[x+3] || row[x+1] != row[x+3] || row[x+2] != row[x+3] {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func runTesseract(ctx context.Context, executable string, input *bytes.Buffer, language string) (string, error) {

@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"io"
 	"os"
@@ -15,8 +18,92 @@ import (
 	"testing"
 	"time"
 
+	"github.com/klippa-app/go-pdfium"
 	"github.com/klippa-app/go-pdfium/requests"
+	"github.com/klippa-app/go-pdfium/responses"
 )
+
+func TestPDFPaintedBlankPage(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	blankScan := image.NewRGBA(image.Rect(0, 0, 1224, 1584))
+	draw.Draw(blankScan, blankScan.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, blankScan, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"auto", "off"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("DOCDEX_PDF_OCR", mode)
+			path := writeTestPDF(t, []string{
+				"BT /F1 12 Tf 72 720 Td (First page.) Tj ET",
+				"1 1 1 rg 0 0 612 792 re f",
+				"q 612 0 0 792 0 0 cm /Im1 Do Q",
+				"BT /F1 12 Tf 72 720 Td (Third page.) Tj ET",
+			}, encoded.Bytes())
+			doc, err := File(context.Background(), path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(doc.Sections) != 2 || doc.Sections[1].PageStart != 4 {
+				t.Fatalf("blank page lost provenance: %+v", doc)
+			}
+		})
+	}
+}
+
+func TestPDFBlankRasterKeepsFaintContent(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		color color.RGBA
+		blank bool
+	}{
+		{"white", color.RGBA{255, 255, 255, 255}, true},
+		{"transparent", color.RGBA{}, true},
+		{"faint gray", color.RGBA{254, 254, 254, 255}, false},
+		{"faint red", color.RGBA{255, 254, 254, 255}, false},
+		{"faint translucent", color.RGBA{0, 0, 0, 1}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+			draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
+			img.SetRGBA(4, 4, tc.color)
+			// Subimages exercise nonzero bounds and a stride wider than the raster.
+			if got := blankPDFRaster(img.SubImage(image.Rect(2, 2, 6, 6)).(*image.RGBA)); got != tc.blank {
+				t.Fatalf("blank=%v want=%v", got, tc.blank)
+			}
+		})
+	}
+}
+
+type unreadableTextPDF struct{ pdfium.Pdfium }
+
+func (p unreadableTextPDF) FPDFText_LoadPage(*requests.FPDFText_LoadPage) (*responses.FPDFText_LoadPage, error) {
+	return nil, errors.New("broken text layer")
+}
+
+func TestPDFForcedOCRBypassesBrokenTextLayer(t *testing.T) {
+	// A genuinely blank rendering also makes this regression independent of
+	// an installed Tesseract. The wrapper simulates a text decoder failure.
+	data := testPDF([]string{"1 1 1 rg 0 0 612 792 re f"}, nil)
+	pdfRuntime.Do(func() { pdfRuntime.pool, pdfRuntime.err = newPDFPool() })
+	if pdfRuntime.err != nil {
+		t.Fatal(pdfRuntime.err)
+	}
+	instance, err := pdfRuntime.pool.GetInstanceWithContext(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer instance.Close()
+	doc, err := instance.OpenDocument(&requests.OpenDocument{File: &data})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := requests.Page{ByIndex: &requests.PageByIndex{Document: doc.Document, Index: 0}}
+	text, err := pdfPage(context.Background(), unreadableTextPDF{instance}, page, ocrOptions{mode: "always", language: "eng"})
+	if err != nil || text != "" {
+		t.Fatalf("forced OCR still depends on text decoding: %q, %v", text, err)
+	}
+}
 
 func TestMain(m *testing.M) {
 	// A real subprocess exercises exec cancellation and bounded pipe copies

@@ -106,26 +106,29 @@ func pdfFile(ctx context.Context, path string) (doc Document, err error) {
 }
 
 func pdfPage(ctx context.Context, instance pdfium.Pdfium, page requests.Page, options ocrOptions) (string, error) {
-	text, err := pdfPageText(instance, page)
-	if err != nil {
-		return "", err
-	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if options.mode != "always" && readablePDFText(text) {
-		return text, nil
+	// Forced OCR must remain usable when the text layer cannot be decoded.
+	if options.mode != "always" {
+		text, err := pdfPageText(instance, page)
+		if err != nil {
+			return "", err
+		}
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if readablePDFText(text) {
+			return text, nil
+		}
 	}
 	objects, err := instance.FPDFPage_CountObjects(&requests.FPDFPage_CountObjects{Page: page})
 	if err != nil {
 		return "", err
 	}
-	if objects.Count == 0 && text == "" {
+	if objects.Count == 0 {
 		return "", nil
 	} // Preserve blank-page numbering.
-	if options.mode == "off" {
-		return "", errors.New("page has no usable text layer; enable local OCR with DOCDEX_PDF_OCR=auto")
-	}
 	return ocrPDFPage(ctx, instance, page, options)
 }
 

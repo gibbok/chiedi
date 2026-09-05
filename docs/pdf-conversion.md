@@ -18,8 +18,11 @@ extensions are not added in this change.
 
 The default `DOCDEX_PDF_OCR=auto` extracts text first and runs local Tesseract
 when a nonblank page has no letters or numbers. It handles image-only documents
-and mixed documents containing digital and scanned pages. Truly empty pages are
-skipped. Missing OCR tools, missing language data, or unreadable nonblank pages
+and mixed documents containing digital and scanned pages. Empty pages and pages
+whose rendering is entirely white/transparent are skipped, including white
+graphics and blank scan images, without requiring Tesseract. This check uses no
+color tolerance, so faint marks are not treated as blank; noisy blank scans may
+still require OCR. Missing OCR tools, missing language data, or unreadable nonblank pages
 fail the document with a page-specific error instead of silently indexing only
 part of it. Other documents remain indexable.
 
@@ -45,7 +48,7 @@ indexing or reconciliation.
 | Variable | Values | Behavior |
 | --- | --- | --- |
 | `DOCDEX_PDF_OCR` | `auto` (default) | OCR pages without usable text. |
-| `DOCDEX_PDF_OCR` | `always` | OCR every nonempty page; useful for broken text layers or scanned text alongside a digital header. |
+| `DOCDEX_PDF_OCR` | `always` | Bypass text decoding and OCR every visually nonempty page; useful for broken text layers or scanned text alongside a digital header. |
 | `DOCDEX_PDF_OCR` | `off` | No external OCR; a page requiring OCR reports an error. |
 | `DOCDEX_OCR_LANG` | `eng` (default), or installed Tesseract language names joined with `+` | Language data used for OCR. |
 
