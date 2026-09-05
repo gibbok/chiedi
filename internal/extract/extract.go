@@ -7,11 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
-	"rsc.io/pdf"
 	"github.com/gibbok/local-genius/internal/source"
 )
 
@@ -139,62 +137,6 @@ func markdownHeading(line string) (int, string) {
 		return 0, ""
 	}
 	return level, strings.TrimSpace(trim[level:])
-}
-
-func pdfFile(ctx context.Context, path string) (doc Document, err error) {
-	defer func(){if recovered:=recover();recovered!=nil{doc=Document{};err=fmt.Errorf("parse PDF: parser panic: %v",recovered)}}()
-	file,err:=source.Open(path);if err!=nil{return Document{},err};defer file.Close()
-	info,err:=file.Stat();if err!=nil{return Document{},err}
-	r, err := pdf.NewReader(file,info.Size())
-	if err != nil {
-		return Document{}, fmt.Errorf("parse PDF: %w", err)
-	}
-	if r.NumPage() > MaxPDFPages {
-		return Document{}, fmt.Errorf("PDF exceeds %d-page limit", MaxPDFPages)
-	}
-	doc = Document{Title: filepath.Base(path)}
-	total := 0
-	for pageNo := 1; pageNo <= r.NumPage(); pageNo++ {
-		if err := ctx.Err(); err != nil {
-			return Document{}, err
-		}
-		page := r.Page(pageNo)
-		if page.V.IsNull() {
-			continue
-		}
-		texts := append([]pdf.Text(nil), page.Content().Text...)
-		sort.SliceStable(texts, func(i, j int) bool {
-			if texts[i].Y == texts[j].Y {
-				return texts[i].X < texts[j].X
-			}
-			return texts[i].Y > texts[j].Y
-		})
-		var b strings.Builder
-		lastY := 0.0
-		for i, item := range texts {
-			if i > 0 {
-				if lastY-item.Y > item.FontSize*.8 {
-					b.WriteByte('\n')
-				} else {
-					b.WriteByte(' ')
-				}
-			}
-			b.WriteString(item.S)
-			lastY = item.Y
-		}
-		text := strings.TrimSpace(b.String())
-		total += len(text)
-		if total > MaxExtractedBytes {
-			return Document{}, errors.New("PDF extracted text exceeds limit")
-		}
-		if text != "" {
-			doc.Sections = append(doc.Sections, Section{Text: text, PageStart: pageNo, PageEnd: pageNo})
-		}
-	}
-	if len(doc.Sections) == 0 {
-		return Document{}, errors.New("PDF has no extractable text layer")
-	}
-	return doc, nil
 }
 
 func normalize(s string) string {

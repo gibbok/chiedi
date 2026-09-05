@@ -17,3 +17,7 @@ coverage.*
 .vscode/
 go.work
 go.work.sum
+
+# Temporary conversion corpora must never be committed
+/temp/
+/tmp/
