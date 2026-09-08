@@ -30,6 +30,7 @@ type Stats struct {
 	Renamed        int      `json:"renamed_documents"`
 	Deleted        int      `json:"deleted_documents"`
 	Failed         int      `json:"failed_documents"`
+	FailedDocumentPaths []string `json:"failed_document_paths"`
 	Errors         []string `json:"errors,omitempty"`
 	CompletedAt    string   `json:"completed_at"`
 }
@@ -37,6 +38,15 @@ type Stats struct {
 type Indexer struct {
 	Store    *store.Store
 	Embedder embedding.Embedder
+}
+
+func (stats *Stats) addFailedDocument(path string) {
+	stats.Failed++
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		absolute = filepath.Clean(path)
+	}
+	stats.FailedDocumentPaths = append(stats.FailedDocumentPaths, absolute)
 }
 
 func (i Indexer) ValidateCompatibility(ctx context.Context) error {
@@ -57,7 +67,7 @@ func (i Indexer) Reconcile(ctx context.Context) (Stats,error) {
 	if err:=i.Store.SetMeta(ctx,"embedding_model_id",i.Embedder.ID());err!=nil{return Stats{},fmt.Errorf("persist embedding model identity: %w",err)}
 	if err:=i.Store.SetMeta(ctx,"embedding_dimensions",fmt.Sprint(i.Embedder.Dimensions()));err!=nil{return Stats{},fmt.Errorf("persist embedding dimensions: %w",err)}
 	roots,err:=i.Store.Roots(ctx);if err!=nil{return Stats{},err}
-	stats:=Stats{}
+	stats:=Stats{FailedDocumentPaths:make([]string,0)}
 	for _,root:=range roots{
 		if err:=ctx.Err();err!=nil{return stats,err}
 		if err:=i.reconcileRoot(ctx,root,&stats);err!=nil{if ctx.Err()!=nil{return stats,ctx.Err()};stats.Errors=append(stats.Errors,err.Error())}
@@ -97,7 +107,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		}}
 		if found{seen[old.ID]=true;if sameFileMetadata(old,info,identity)&&old.Format==format{return nil}}
 		if info.Size()>extract.MaxFileBytes{
-			stats.Failed++;message:=fmt.Sprintf("file exceeds %d-byte limit",extract.MaxFileBytes)
+			stats.addFailedDocument(filepath.Join(root.Path,filepath.FromSlash(rel)));message:=fmt.Sprintf("file exceeds %d-byte limit",extract.MaxFileBytes)
 			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),Format:format,Status:"failed",Error:message});return err
 		}
 		content,err:=readFileBounded(path,extract.MaxFileBytes);if err!=nil{stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
@@ -113,7 +123,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		afterIdentity:=fileIdentity(after);identityChanged:=identity!=""&&afterIdentity!=""&&identity!=afterIdentity
 		if after.Size()!=info.Size()||after.ModTime().UnixNano()!=info.ModTime().UnixNano()||identityChanged{stats.Errors=append(stats.Errors,fmt.Sprintf("%s changed during indexing; deferred until the next reconciliation",rel));return nil}
 		if extractErr!=nil{
-			stats.Failed++
+			stats.addFailedDocument(filepath.Join(root.Path,filepath.FromSlash(rel)))
 			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:format,Status:"failed",Error:extractErr.Error()})
 			if err!=nil{return err};if found{seen[old.ID]=true};return nil
 		}
