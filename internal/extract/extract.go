@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gibbok/local-genius/internal/source"
+	"github.com/gibbok/chiedi/internal/source"
 )
 
 const (

@@ -16,15 +16,15 @@ import (
 
 func TestBuiltBinaryCommonUseCase(t *testing.T){
 	if testing.Short(){t.Skip("end-to-end test excluded only by explicit -short")}
-	_,file,_,_:=runtime.Caller(0);repo:=filepath.Clean(filepath.Join(filepath.Dir(file),"..",".."));dir:=t.TempDir();binary:=filepath.Join(dir,"docdex")
-	cmd:=exec.Command("go","build","-o",binary,"./cmd/docdex");cmd.Dir=repo;if out,err:=cmd.CombinedOutput();err!=nil{t.Fatalf("build: %v\n%s",err,out)}
+	_,file,_,_:=runtime.Caller(0);repo:=filepath.Clean(filepath.Join(filepath.Dir(file),"..",".."));dir:=t.TempDir();binary:=filepath.Join(dir,"chiedi")
+	cmd:=exec.Command("go","build","-o",binary,"./cmd/chiedi");cmd.Dir=repo;if out,err:=cmd.CombinedOutput();err!=nil{t.Fatalf("build: %v\n%s",err,out)}
 	corpus:=filepath.Join(dir,"acceptance");if err:=os.MkdirAll(filepath.Join(corpus,"nested"),0o700);err!=nil{t.Fatal(err)}
 	write(t,filepath.Join(corpus,"hr.md"),"# Employee handbook\n\n## Annual leave\n\nEmployees are entitled to twenty business days of paid annual leave each year.\n")
 	write(t,filepath.Join(corpus,"technical.txt"),"The storage engine uses write-ahead logging. Exact reference DB-ZX-481.\n")
 	write(t,filepath.Join(corpus,"nested","project.md"),"# Project Aurora\n\nThe release train leaves on Friday.\n")
 	write(t,filepath.Join(corpus,"ignored.bin"),"annual leave distractor")
 	writePDF(t,filepath.Join(corpus,"contract.pdf"),"Either party may end the agreement early with thirty days written notice. Ref CT-902.")
-	db:=filepath.Join(dir,"docdex.db");run:=func(args ...string)string{t.Helper();all:=append([]string{"--db",db},args...);c:=exec.Command(binary,all...);out,err:=c.CombinedOutput();if err!=nil{t.Fatalf("%v: %v\n%s",args,err,out)};return string(out)}
+	db:=filepath.Join(dir,"chiedi.db");run:=func(args ...string)string{t.Helper();all:=append([]string{"--db",db},args...);c:=exec.Command(binary,all...);out,err:=c.CombinedOutput();if err!=nil{t.Fatalf("%v: %v\n%s",args,err,out)};return string(out)}
 	run("init");run("add",corpus);indexOut:=run("index");if !strings.Contains(indexOut,`"embedding_jobs": 4`){t.Fatalf("unexpected initial index:\n%s",indexOut)}
 	testConcurrentProcesses(t,binary,db)
 	status:=run("status");if !strings.Contains(status,`"indexed_count": 4`)||strings.Contains(status,"ignored.bin"){t.Fatalf("unexpected status:\n%s",status)}

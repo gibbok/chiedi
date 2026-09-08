@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gibbok/local-genius/internal/indexer"
-	"github.com/gibbok/local-genius/internal/retrieval"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/indexer"
+	"github.com/gibbok/chiedi/internal/retrieval"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 type Server struct {
@@ -61,7 +61,7 @@ func responseID(raw json.RawMessage)(any,bool){dec:=json.NewDecoder(bytes.NewRea
 func (s Server) handle(ctx context.Context,req request)(any,*rpcError){
 	switch req.Method{
 	case "initialize":
-		return map[string]any{"protocolVersion":"2025-06-18","capabilities":map[string]any{"tools":map[string]any{"listChanged":false}},"serverInfo":map[string]any{"name":"docdex","version":"0.1.0"}},nil
+		return map[string]any{"protocolVersion":"2025-06-18","capabilities":map[string]any{"tools":map[string]any{"listChanged":false}},"serverInfo":map[string]any{"name":"chiedi","version":"0.1.0"}},nil
 	case "ping":return map[string]any{},nil
 	case "tools/list":return map[string]any{"tools":toolDefinitions()},nil
 	case "tools/call":

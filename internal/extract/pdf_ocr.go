@@ -20,14 +20,14 @@ import (
 type ocrOptions struct{ mode, language string }
 
 func pdfOCROptions() (ocrOptions, error) {
-	mode := os.Getenv("DOCDEX_PDF_OCR")
+	mode := os.Getenv("CHIEDI_PDF_OCR")
 	if mode == "" {
 		mode = "auto"
 	}
 	if mode != "auto" && mode != "always" && mode != "off" {
-		return ocrOptions{}, errors.New("DOCDEX_PDF_OCR must be auto, always, or off")
+		return ocrOptions{}, errors.New("CHIEDI_PDF_OCR must be auto, always, or off")
 	}
-	language := os.Getenv("DOCDEX_OCR_LANG")
+	language := os.Getenv("CHIEDI_OCR_LANG")
 	if language == "" {
 		language = "eng"
 	}
@@ -56,7 +56,7 @@ func ocrPDFPage(ctx context.Context, instance pdfium.Pdfium, page requests.Page,
 		return "", nil
 	}
 	if options.mode == "off" {
-		return "", errors.New("page has no usable text layer; enable local OCR with DOCDEX_PDF_OCR=auto")
+		return "", errors.New("page has no usable text layer; enable local OCR with CHIEDI_PDF_OCR=auto")
 	}
 	executable, err := exec.LookPath("tesseract")
 	if err != nil {

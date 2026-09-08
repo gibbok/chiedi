@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gibbok/local-genius/internal/embedding"
-	"github.com/gibbok/local-genius/internal/indexer"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/embedding"
+	"github.com/gibbok/chiedi/internal/indexer"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 type qualityCase struct{question,source,path string}

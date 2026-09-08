@@ -1,4 +1,4 @@
-module github.com/gibbok/local-genius
+module github.com/gibbok/chiedi
 
 go 1.25.0
 

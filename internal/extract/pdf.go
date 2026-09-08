@@ -186,7 +186,7 @@ func newPDFPool() (pdfium.Pool, error) {
 	// Cache only compiled engine code, never document content. A read-only home
 	// or unavailable cache must not prevent document conversion.
 	if dir, err := os.UserCacheDir(); err == nil {
-		if cache, err := wazero.NewCompilationCacheWithDir(filepath.Join(dir, "docdex", "pdfium")); err == nil {
+		if cache, err := wazero.NewCompilationCacheWithDir(filepath.Join(dir, "chiedi", "pdfium")); err == nil {
 			config = config.WithCompilationCache(cache)
 		}
 	}

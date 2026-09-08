@@ -1,6 +1,6 @@
-# local-genius (`docdex`)
+# chiedi (`chiedi`)
 
-`docdex` is a local-first semantic document retrieval engine for Codex. It indexes `.txt`, `.md`, and text-layer `.pdf` files into one SQLite database, combines local vector similarity with FTS5, and exposes grounded evidence through MCP over stdio.
+`chiedi` is a local-first semantic document retrieval engine for Codex. It indexes `.txt`, `.md`, and text-layer `.pdf` files into one SQLite database, combines local vector similarity with FTS5, and exposes grounded evidence through MCP over stdio.
 
 No document content, query, or embedding leaves the machine. Database files use owner-only filesystem permissions. The built-in 384-dimensional feature-hashing embedder requires no model server or network access.
 
@@ -9,19 +9,19 @@ Requires Go 1.25 or newer. SQLite-vec is bundled through the pure-Go SQLite driv
 ## Quick start
 
 ```bash
-go build -o docdex ./cmd/docdex
-export DOCDEX_DB="$PWD/docdex.db"
-./docdex init
-./docdex add ~/Documents
-./docdex index
-./docdex search "How many vacation days do employees receive?"
-./docdex status
+go build -o chiedi ./cmd/chiedi
+export CHIEDI_DB="$PWD/chiedi.db"
+./chiedi init
+./chiedi add ~/Documents
+./chiedi index
+./chiedi search "How many vacation days do employees receive?"
+./chiedi status
 ```
 
 Configure Codex to run the MCP server with the same database path:
 
 ```bash
-DOCDEX_DB=/absolute/path/docdex.db /absolute/path/docdex mcp
+CHIEDI_DB=/absolute/path/chiedi.db /absolute/path/chiedi mcp
 ```
 
 MCP tools:
@@ -38,28 +38,28 @@ Every retrieval reconciles configured roots first, so edits, renames, moves, add
 ## Commands
 
 ```text
-docdex init
-docdex add <directory>
-docdex remove <directory>
-docdex roots
-docdex index
-docdex reconcile
-docdex search [--limit N] <question>
-docdex status
-docdex doctor
-docdex mcp
-docdex version
+chiedi init
+chiedi add <directory>
+chiedi remove <directory>
+chiedi roots
+chiedi index
+chiedi reconcile
+chiedi search [--limit N] <question>
+chiedi status
+chiedi doctor
+chiedi mcp
+chiedi version
 ```
 
-Use `--db PATH` before the command, or set `DOCDEX_DB`. The default is `docdex.db` in the current directory.
+Use `--db PATH` before the command, or set `CHIEDI_DB`. The default is `chiedi.db` in the current directory.
 
 ## Locating failed documents
 
-`docdex index` and `docdex reconcile` return `failed_documents` (failures
+`chiedi index` and `chiedi reconcile` return `failed_documents` (failures
 encountered in that run) and `failed_document_paths` (their absolute paths).
 An unchanged run reports zero and `[]`, even when previously failed files remain.
 
-For **all currently stored failures**, use `docdex status` or MCP
+For **all currently stored failures**, use `chiedi status` or MCP
 `index_status`: `counts.failed_count` is the total and the top-level
 `failed_document_paths` array contains the matching absolute paths, ordered
 by root and relative filename. These paths remain visible across unchanged
@@ -68,7 +68,7 @@ The nested `last_reconciliation` describes only the most recent run.
 
 MCP `index_status` reconciles first; CLI `status` reads the stored state
 without rescanning. After fixing, renaming, or deleting a file, run
-`docdex reconcile` before CLI `status`. Use MCP `list_documents` with
+`chiedi reconcile` before CLI `status`. Use MCP `list_documents` with
 `{"status":"failed"}` to inspect failure reasons. No database rebuild is
 needed to show current failure paths from an existing index.
 
@@ -76,7 +76,7 @@ needed to show current failure paths from an existing index.
 
 V1 indexes UTF-8 text, Markdown, and PDFs. PDFium handles PDF text decoding and word spacing; optional local Tesseract OCR reads scanned pages while preserving page citations. See [PDF conversion](docs/pdf-conversion.md) for installation, language settings, limits, and upgrading an existing index. The built-in embedder uses deterministic feature hashing, stemming, and a curated English synonym dictionary. It is not a trained language model and does not provide general semantic understanding. The `embedding.Embedder` interface permits a future local model.
 
-Embedding model identities are stored with the index. If an upgrade changes the projection algorithm, `docdex` rejects the older vectors instead of mixing incompatible embeddings. Rebuild into a new database, or remove the old database and run `init`, `add`, and `index` again.
+Embedding model identities are stored with the index. If an upgrade changes the projection algorithm, `chiedi` rejects the older vectors instead of mixing incompatible embeddings. Rebuild into a new database, or remove the old database and run `init`, `add`, and `index` again.
 
 ## Verification
 
@@ -94,7 +94,7 @@ make test-all
 
 The complete gate verifies dependencies, unit and integration tests, race detection, static analysis, the production build, repeated state-sensitive tests, and a real-binary acceptance scenario. That scenario covers initialize → add → index → semantic search, exact search, text-layer PDF extraction, every MCP tool, concurrent processes, incremental update, rename reuse, delete, reconciliation, malformed input, restart, and `doctor`. Unit regressions also cover transactional rollback, filesystem failures, symlink containment, literal path filters, empty JSON collections, multi-root provenance, malformed/non-finite vectors, stale FTS rows, strict MCP arguments, bounded file reads, and 50 dictionary/identifier regression cases and separate document-level retrieval cases.
 
-Run `make help` to see individual targets. See [Testing docdex](docs/testing.md) for expected behavior, preserved demo files, focused commands, and failure interpretation.
+Run `make help` to see individual targets. See [Testing chiedi](docs/testing.md) for expected behavior, preserved demo files, focused commands, and failure interpretation.
 
 ## Vector storage and evidence consistency
 

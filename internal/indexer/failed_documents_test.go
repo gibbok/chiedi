@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gibbok/local-genius/internal/embedding"
-	"github.com/gibbok/local-genius/internal/extract"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/embedding"
+	"github.com/gibbok/chiedi/internal/extract"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 func TestFailedDocumentsExposeAbsolutePaths(t *testing.T) {
