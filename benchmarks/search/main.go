@@ -88,7 +88,7 @@ func run(ctx context.Context, sizes []int, repeats int) error {
 	report := new(bytes.Buffer)
 	fmt.Fprintln(report, "# Personal search benchmark\n\nStatus: COMPLETE (all indexing, integrity and query checks passed).")
 	fmt.Fprintf(report, "\nUTC: %s\n\n## Environment\n\n```text\n%s\n```\n", time.Now().UTC().Format(time.RFC3339), hardware())
-	fmt.Fprintf(report, "\n## Method\n\nCorpus v1: deterministic synthetic English family/project records, half text PDFs and half plain text (PDF count rounded down). Each document has 3–7 sections with unique record IDs, dates and amounts. No scans or OCR. Sizes: %v. Model: %s, %d dimensions.\n\nSingle client, persistent SQLite connection, sequential queries, no concurrent indexing. Each query/mode has 3 untimed warmups then %d samples; modes rotate each repetition. Percentiles use nearest rank. All samples are warm-cache, not cold disk measurements.\n\nVector-only uses Candidates with an empty FTS query; full-text-only uses Candidates with a zero vector (skips vector SQL). Both fetch source text and return up to 40 candidates. Query embedding is prepared outside these two timings. Hybrid uses the normal Retriever with limit 10 and includes query embedding and rank fusion. Timings exclude process startup, file reconciliation, indexing and output formatting. These are retrieval timings, not CLI end-to-end timings. Returned counts are checked, not semantic relevance.\n", sizes, embedding.Projection{}.ID(), embedding.Projection{}.Dimensions(), repeats)
+	fmt.Fprintf(report, "\n## Method\n\nCorpus v1: deterministic synthetic English family/project records, half text PDFs and half plain text (PDF count rounded down). Each document has 3–7 sections with unique record IDs, dates and amounts. No scans or OCR. Sizes: %v. Model: %s, %d dimensions.\n\nSingle client, persistent SQLite connection, sequential queries, no concurrent indexing. Each query/mode has 3 untimed warmups then %d samples; modes rotate each repetition. Percentiles use nearest rank. All samples are warm-cache, not cold disk measurements.\n\nVector-only uses Candidates with an empty FTS query; full-text-only uses Candidates with a zero vector (skips vector SQL). Both fetch source text and return up to 40 candidates. Query embedding is prepared outside these two timings. Hybrid uses the normal Retriever with limit 10 and includes query embedding and rank fusion. Timings exclude process startup, file reconciliation, indexing and output formatting. These are retrieval timings, not CLI end-to-end timings. Latency checks returned counts; a separate untimed pass measures document relevance against deterministic ground truth.\n", sizes, embedding.Projection{}.ID(), embedding.Projection{}.Dimensions(), repeats)
 	fmt.Fprintln(report, "\n## Results\n\n| Documents | PDFs | Chunks | Index seconds |\n|---:|---:|---:|---:|")
 	var details bytes.Buffer
 	for _, n := range sizes {
@@ -121,13 +121,11 @@ func scenario(ctx context.Context, dir string, n, repeats int) (string, string, 
 		if err := ctx.Err(); err != nil {
 			return "", "", err
 		}
-		ext := ".txt"
 		data := []byte(document(i))
 		if i%2 == 1 {
-			ext = ".pdf"
 			data = pdf(document(i))
 		}
-		if err := os.WriteFile(filepath.Join(corpus, fmt.Sprintf("record-%05d%s", i, ext)), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(corpus, recordPath(i)), data, 0644); err != nil {
 			return "", "", err
 		}
 	}
@@ -230,6 +228,11 @@ func scenario(ctx context.Context, dir string, n, repeats int) (string, string, 
 			fmt.Fprintf(&rows, "| %s | %s | %d | %.3f | %.3f | %.3f | %.3f | %.3f | %d–%d |\n", q, mode.name, len(a), a[0], percentile(a, .5), percentile(a, .95), a[len(a)-1], sum/float64(len(a)), mins[m], maxs[m])
 		}
 	}
+	quality, err := measureQuality(ctx, s, folder, n)
+	if err != nil {
+		return "", "", err
+	}
+	rows.WriteString(quality)
 	return fmt.Sprintf("| %d | %d | %d | %.3f |", n, n/2, counts.Chunks, elapsed), rows.String(), nil
 }
 

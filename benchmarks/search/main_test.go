@@ -51,7 +51,7 @@ func TestScenario(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(summary, "| 20 | 10 |") || strings.Count(rows, "| vector |") != len(queries) {
+	if !strings.Contains(summary, "| 20 | 10 |") || strings.Count(rows, "| vector |") != len(queries)+4 {
 		t.Fatalf("incomplete report: %s\n%s", summary, rows)
 	}
 }
