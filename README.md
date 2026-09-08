@@ -1,4 +1,4 @@
-# chiedi (`chiedi`)
+# chiedi
 
 `chiedi` is a local-first semantic document retrieval engine for Codex. It indexes `.txt`, `.md`, and text-layer `.pdf` files into one SQLite database, combines local vector similarity with FTS5, and exposes grounded evidence through MCP over stdio.
 
