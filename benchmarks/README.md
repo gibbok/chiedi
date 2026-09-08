@@ -65,8 +65,8 @@ Every run writes a new `benchmarks/output/<UTC timestamp>-<unique suffix>/`:
 - `<count>/index.db`: isolated database, with any SQLite sidecars.
 - `FAILED.txt`: failure details if a scenario aborts; no successful report.
 
-The **entire output folder is Git-ignored**. Only benchmark source code, its tests,
-and these instructions belong in Git. Output is never indexed as a user root,
+The **entire output folder is Git-ignored**. Benchmark source code, its tests, these instructions,
+and explicitly selected reports under `benchmarks/samples/` belong in Git. Output is never indexed as a user root,
 and existing user databases are never opened. Repeated runs do not overwrite
 previous results. Remove unwanted run directories manually to reclaim space.
 
@@ -76,3 +76,10 @@ revision/dirty status. Hardware describes the machine executing the benchmark;
 when run in a hosted container it does not describe your laptop. Host RAM and
 CPU counts can exceed container limits. Run it on your own computer for local
 performance numbers, and avoid other heavy work during measurement.
+
+## Sample result
+
+See [the Linux / Xeon Platinum 8573C sample](samples/2026-09-08-linux-xeon-8573c.md)
+for the 100, 500 and 2,000-document run, including vector-only timings and
+execution-machine hardware. This selected report is committed as an example;
+new runs continue to write only to the ignored output directory.
