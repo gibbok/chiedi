@@ -363,10 +363,12 @@ func (s *Store) ReadChunks(ctx context.Context, ids []int64, before, after int) 
 	return out,nil
 }
 
-func (s *Store) Counts(ctx context.Context)(Counts,error){
+func (s *Store) Counts(ctx context.Context)(Counts,error){return countsWith(ctx,s.db)}
+
+func countsWith(ctx context.Context,reader sqlReader)(Counts,error){
 	var c Counts
 	queries:=[]struct{q string;dst *int}{{`SELECT count(*) FROM roots`,&c.Roots},{`SELECT count(*) FROM documents`,&c.Documents},{`SELECT count(*) FROM documents WHERE status='indexed'`,&c.Indexed},{`SELECT count(*) FROM documents WHERE status='failed'`,&c.Failed},{`SELECT count(*) FROM chunks`,&c.Chunks}}
-	for _,item:=range queries{if err:=s.db.QueryRowContext(ctx,item.q).Scan(item.dst);err!=nil{return c,err}}
+	for _,item:=range queries{if err:=reader.QueryRowContext(ctx,item.q).Scan(item.dst);err!=nil{return c,err}}
 	return c,nil
 }
 
