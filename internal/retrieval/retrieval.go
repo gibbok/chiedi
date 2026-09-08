@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gibbok/local-genius/internal/embedding"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/embedding"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 type Result struct {

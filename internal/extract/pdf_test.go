@@ -24,7 +24,7 @@ import (
 )
 
 func TestPDFStampPageIsNotSilentlyOmitted(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("CHIEDI_PDF_OCR", "off")
 	t.Setenv("PATH", t.TempDir())
 	path := writeStampPDF(t)
 	doc, err := File(context.Background(), path)
@@ -37,11 +37,11 @@ func TestPDFStampPageIsNotSilentlyOmitted(t *testing.T) {
 }
 
 func TestPDFStampLocalOCR(t *testing.T) {
-	if os.Getenv("DOCDEX_TEST_OCR") != "1" {
-		t.Skip("DOCDEX_TEST_OCR=1 requires real stamp OCR")
+	if os.Getenv("CHIEDI_TEST_OCR") != "1" {
+		t.Skip("CHIEDI_TEST_OCR=1 requires real stamp OCR")
 	}
-	t.Setenv("DOCDEX_PDF_OCR", "auto")
-	t.Setenv("DOCDEX_OCR_LANG", "eng")
+	t.Setenv("CHIEDI_PDF_OCR", "auto")
+	t.Setenv("CHIEDI_OCR_LANG", "eng")
 	doc, err := File(context.Background(), writeStampPDF(t))
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestPDFStampLocalOCR(t *testing.T) {
 }
 
 func TestPDFHiddenStampRemainsHidden(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "auto")
+	t.Setenv("CHIEDI_PDF_OCR", "auto")
 	t.Setenv("PATH", t.TempDir())
 	path := writeStampPDF(t)
 	data, err := os.ReadFile(path)
@@ -102,7 +102,7 @@ func TestPDFPaintedBlankPage(t *testing.T) {
 	}
 	for _, mode := range []string{"auto", "off"} {
 		t.Run(mode, func(t *testing.T) {
-			t.Setenv("DOCDEX_PDF_OCR", mode)
+			t.Setenv("CHIEDI_PDF_OCR", mode)
 			path := writeTestPDF(t, []string{
 				"BT /F1 12 Tf 72 720 Td (First page.) Tj ET",
 				"1 1 1 rg 0 0 612 792 re f",
@@ -177,7 +177,7 @@ func TestPDFForcedOCRBypassesBrokenTextLayer(t *testing.T) {
 func TestMain(m *testing.M) {
 	// A real subprocess exercises exec cancellation and bounded pipe copies
 	// without requiring a shell or an installed OCR engine for these cases.
-	switch os.Getenv("DOCDEX_TEST_OCR_HELPER") {
+	switch os.Getenv("CHIEDI_TEST_OCR_HELPER") {
 	case "empty":
 		os.Exit(0)
 	case "fail":
@@ -202,13 +202,13 @@ func TestOCRProcessErrorsAndCancellation(t *testing.T) {
 		{"empty", "no readable text"}, {"fail", "missing language data"}, {"large", "exceeds limit"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
-			t.Setenv("DOCDEX_TEST_OCR_HELPER", tc.mode)
+			t.Setenv("CHIEDI_TEST_OCR_HELPER", tc.mode)
 			if _, err := runTesseract(context.Background(), executable, &bytes.Buffer{}, "eng"); err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("got %v", err)
 			}
 		})
 	}
-	t.Setenv("DOCDEX_TEST_OCR_HELPER", "wait")
+	t.Setenv("CHIEDI_TEST_OCR_HELPER", "wait")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
@@ -221,7 +221,7 @@ func TestOCRProcessErrorsAndCancellation(t *testing.T) {
 }
 
 func TestPDFCompressedUnicodeMapping(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("CHIEDI_PDF_OCR", "off")
 	var stream bytes.Buffer
 	z := zlib.NewWriter(&stream)
 	fmt.Fprint(z, "BT /F1 12 Tf 72 720 Td <4180204281> Tj ET")
@@ -250,7 +250,7 @@ func TestPDFCompressedUnicodeMapping(t *testing.T) {
 }
 
 func TestPDFWordSpacingAndPageProvenance(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("CHIEDI_PDF_OCR", "off")
 	path := writeTestPDF(t, []string{
 		"BT /F1 12 Tf 72 720 Td [(Con) 0 (tract) -278 (reference)] TJ 0 -20 Td (First page.) Tj ET",
 		"",
@@ -272,7 +272,7 @@ func TestPDFWordSpacingAndPageProvenance(t *testing.T) {
 }
 
 func TestPDFInvalidBlankAndPageLimit(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("CHIEDI_PDF_OCR", "off")
 	for _, tc := range []struct {
 		name string
 		data []byte
@@ -329,7 +329,7 @@ func TestPDFCancellationAndPoolWait(t *testing.T) {
 
 func TestPDFMixedScanDoesNotSilentlyLosePage(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	t.Setenv("DOCDEX_PDF_OCR", "auto")
+	t.Setenv("CHIEDI_PDF_OCR", "auto")
 	scan := testScan(t)
 	path := writeTestPDF(t, []string{"BT /F1 12 Tf 72 720 Td (Text page.) Tj ET", "q 540 0 0 700 36 46 cm /Im1 Do Q"}, scan)
 	doc, err := File(context.Background(), path)
@@ -339,21 +339,21 @@ func TestPDFMixedScanDoesNotSilentlyLosePage(t *testing.T) {
 	if len(doc.Sections) != 0 {
 		t.Fatal("returned a silently incomplete document")
 	}
-	t.Setenv("DOCDEX_PDF_OCR", "off")
+	t.Setenv("CHIEDI_PDF_OCR", "off")
 	if _, err := File(context.Background(), path); err == nil || !strings.Contains(err.Error(), "enable local OCR") {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestPDFLocalOCR(t *testing.T) {
-	if os.Getenv("DOCDEX_TEST_OCR") != "1" {
-		t.Skip("set DOCDEX_TEST_OCR=1 to require real Tesseract acceptance")
+	if os.Getenv("CHIEDI_TEST_OCR") != "1" {
+		t.Skip("set CHIEDI_TEST_OCR=1 to require real Tesseract acceptance")
 	}
 	if _, err := exec.LookPath("tesseract"); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DOCDEX_PDF_OCR", "auto")
-	t.Setenv("DOCDEX_OCR_LANG", "eng")
+	t.Setenv("CHIEDI_PDF_OCR", "auto")
+	t.Setenv("CHIEDI_OCR_LANG", "eng")
 	path := writeTestPDF(t, []string{"BT /F1 12 Tf 72 720 Td (First digital page.) Tj ET", "", "q 540 0 0 700 36 46 cm /Im1 Do Q"}, testScan(t))
 	doc, err := File(context.Background(), path)
 	if err != nil {
@@ -362,7 +362,7 @@ func TestPDFLocalOCR(t *testing.T) {
 	if len(doc.Sections) != 2 || doc.Sections[1].PageStart != 3 || !strings.Contains(doc.Sections[1].Text, "SCANNED CONTRACT") || !strings.Contains(doc.Sections[1].Text, "thirty days") {
 		t.Fatalf("OCR or provenance: %+v", doc.Sections)
 	}
-	t.Setenv("DOCDEX_PDF_OCR", "always")
+	t.Setenv("CHIEDI_PDF_OCR", "always")
 	path = writeTestPDF(t, []string{"BT /F1 24 Tf 72 720 Td (FORCED OCR CONTRACT) Tj ET"}, nil)
 	doc, err = File(context.Background(), path)
 	if err != nil || !strings.Contains(doc.Sections[0].Text, "FORCED OCR CONTRACT") {
@@ -371,7 +371,7 @@ func TestPDFLocalOCR(t *testing.T) {
 }
 
 func TestPDFOCROptionsAndOutputLimit(t *testing.T) {
-	t.Setenv("DOCDEX_PDF_OCR", "invalid")
+	t.Setenv("CHIEDI_PDF_OCR", "invalid")
 	if _, err := pdfOCROptions(); err == nil {
 		t.Fatal("invalid mode accepted")
 	}

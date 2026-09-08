@@ -1,4 +1,4 @@
-# Testing docdex
+# Testing chiedi
 
 The repository provides two primary ways to validate the application:
 
@@ -27,7 +27,7 @@ Run:
 make demo
 ```
 
-The command builds `bin/docdex`, creates an isolated temporary directory, and prints each operation and its result. It verifies:
+The command builds `bin/chiedi`, creates an isolated temporary directory, and prints each operation and its result. It verifies:
 
 1. database initialization;
 2. root registration;
@@ -55,10 +55,10 @@ KEEP_DEMO=1 make demo
 Use a specific directory instead with:
 
 ```bash
-DOCDEX_DEMO_DIR=/tmp/my-docdex-demo KEEP_DEMO=1 make demo
+CHIEDI_DEMO_DIR=/tmp/my-chiedi-demo KEEP_DEMO=1 make demo
 ```
 
-When `DOCDEX_DEMO_DIR` is supplied, the directory must be empty and the script never deletes it.
+When `CHIEDI_DEMO_DIR` is supplied, the directory must be empty and the script never deletes it.
 
 ## Complete automated verification
 
@@ -76,7 +76,7 @@ This executes the following checks sequentially:
 | `make test-unit` | Unit, integration, protocol, extraction, storage, and indexing tests pass |
 | `make test-race` | Concurrent test execution has no detected data races |
 | `make test-vet` | Go static analysis reports no problems |
-| `make build` | The real `bin/docdex` executable builds |
+| `make build` | The real `bin/chiedi` executable builds |
 | `make test-repeat` | Incremental indexing and retrieval remain stable across repeated runs |
 | `make test-e2e` | The compiled binary passes the complete functional acceptance scenario |
 | `make demo` | The documented CLI and MCP walkthrough works exactly as shown |
@@ -121,26 +121,26 @@ Keep experiments separate from your normal data by selecting an explicit databas
 
 ```bash
 make build
-export DOCDEX_DB="$PWD/manual-test.db"
-./bin/docdex init
-./bin/docdex add /absolute/path/to/test-documents
-./bin/docdex index
-./bin/docdex status
-./bin/docdex search "your question"
-./bin/docdex doctor
+export CHIEDI_DB="$PWD/manual-test.db"
+./bin/chiedi init
+./bin/chiedi add /absolute/path/to/test-documents
+./bin/chiedi index
+./bin/chiedi status
+./bin/chiedi search "your question"
+./bin/chiedi doctor
 ```
 
 ## Codex host smoke test
 
 The automated E2E test launches the production MCP binary, completes initialization, sends the initialized notification, pings it, discovers tools, and calls every tool over stdio. A final host-level check requires a locally authenticated Codex installation and therefore is intentionally manual:
 
-1. configure Codex to launch `/absolute/path/bin/docdex mcp` with `DOCDEX_DB` set to the tested database;
+1. configure Codex to launch `/absolute/path/bin/chiedi mcp` with `CHIEDI_DB` set to the tested database;
 2. restart or refresh MCP connections in Codex;
 3. confirm the `retrieve`, `read_chunks`, `list_documents`, and `index_status` tools are visible;
 4. ask Codex to retrieve a known exact identifier and a semantic paraphrase from the corpus;
 5. confirm its answer cites the returned root, relative path, heading, or PDF page as applicable.
 
-No API token or per-token OpenAI API configuration is required for `docdex`; it communicates with the authenticated Codex host over local stdio.
+No API token or per-token OpenAI API configuration is required for `chiedi`; it communicates with the authenticated Codex host over local stdio.
 
 Remove `manual-test.db`, `manual-test.db-shm`, and `manual-test.db-wal` when the experiment is no longer needed.
 

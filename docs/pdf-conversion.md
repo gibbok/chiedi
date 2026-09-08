@@ -16,7 +16,7 @@ extensions are not added in this change.
 
 ## Scanned PDFs
 
-The default `DOCDEX_PDF_OCR=auto` extracts text first and runs local Tesseract
+The default `CHIEDI_PDF_OCR=auto` extracts text first and runs local Tesseract
 when a nonblank page has no letters or numbers. It handles image-only documents
 and mixed documents containing digital and scanned pages. Empty pages and pages
 whose rendering is entirely white/transparent are skipped, including white
@@ -43,7 +43,7 @@ sudo apt-get install tesseract-ocr tesseract-ocr-eng tesseract-ocr-ces
 Use `tesseract --list-langs` to inspect installed languages. For Czech and English:
 
 ```sh
-DOCDEX_OCR_LANG=ces+eng ./bin/docdex --db fresh.db index
+CHIEDI_OCR_LANG=ces+eng ./bin/chiedi --db fresh.db index
 ```
 
 Set these environment variables on the MCP process as well when it performs
@@ -51,14 +51,14 @@ indexing or reconciliation.
 
 | Variable | Values | Behavior |
 | --- | --- | --- |
-| `DOCDEX_PDF_OCR` | `auto` (default) | OCR pages without usable text. |
-| `DOCDEX_PDF_OCR` | `always` | Bypass text decoding and OCR every visually nonempty page; useful for broken text layers or scanned text alongside a digital header. |
-| `DOCDEX_PDF_OCR` | `off` | No external OCR; a page requiring OCR reports an error. |
-| `DOCDEX_OCR_LANG` | `eng` (default), or installed Tesseract language names joined with `+` | Language data used for OCR. |
+| `CHIEDI_PDF_OCR` | `auto` (default) | OCR pages without usable text. |
+| `CHIEDI_PDF_OCR` | `always` | Bypass text decoding and OCR every visually nonempty page; useful for broken text layers or scanned text alongside a digital header. |
+| `CHIEDI_PDF_OCR` | `off` | No external OCR; a page requiring OCR reports an error. |
+| `CHIEDI_OCR_LANG` | `eng` (default), or installed Tesseract language names joined with `+` | Language data used for OCR. |
 
 OCR stays on the machine. Rasterized pages are passed through memory/stdin;
 there are no temporary document copies or cloud calls. Compiled PDFium engine
-code is cached under the OS user cache directory in `docdex/pdfium`; that cache
+code is cached under the OS user cache directory in `chiedi/pdfium`; that cache
 contains no document data. If the cache cannot be created, compilation proceeds
 in memory.
 
@@ -68,9 +68,9 @@ Unchanged files keep their existing chunks. To apply the new conversion engine
 to an old corpus, create a new database, add the same roots, and index again:
 
 ```sh
-./bin/docdex --db improved.db init
-./bin/docdex --db improved.db add /absolute/path/to/documents
-./bin/docdex --db improved.db index
+./bin/chiedi --db improved.db init
+./bin/chiedi --db improved.db add /absolute/path/to/documents
+./bin/chiedi --db improved.db index
 ```
 
 Use that new database for search and MCP after checking the results. The same
@@ -101,12 +101,12 @@ documents and results in the ignored repository `temp/` directory; never commit
 them. The focused acceptance test requires real Tesseract and English data:
 
 ```sh
-DOCDEX_TEST_OCR=1 go test -v -count=1 ./internal/extract
-DOCDEX_TEST_OCR=1 make verify
-DOCDEX_TEST_OCR=1 make verify-full
+CHIEDI_TEST_OCR=1 go test -v -count=1 ./internal/extract
+CHIEDI_TEST_OCR=1 make verify
+CHIEDI_TEST_OCR=1 make verify-full
 ```
 
-Without `DOCDEX_TEST_OCR=1`, only the real-Tesseract acceptance case is skipped;
+Without `CHIEDI_TEST_OCR=1`, only the real-Tesseract acceptance case is skipped;
 PDF decoding, page provenance, missing OCR, malformed files, limits, and
 cancellation regressions still run. The complete gates retain all existing CLI,
 MCP, indexing, SQLite-vec, retrieval, race, vet, and reconciliation checks.
@@ -125,12 +125,12 @@ To include the independently authored W3C PDF test sample in that same E2E run:
 mkdir -p temp/public-pdfs
 curl -fL https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf \
   -o temp/public-pdfs/w3c-dummy.pdf
-DOCDEX_TEST_OCR=1 \
-DOCDEX_TEST_PUBLIC_PDF="$PWD/temp/public-pdfs/w3c-dummy.pdf" \
+CHIEDI_TEST_OCR=1 \
+CHIEDI_TEST_PUBLIC_PDF="$PWD/temp/public-pdfs/w3c-dummy.pdf" \
   go test -v -count=1 ./internal/e2e -run TestBuiltBinaryPDFConversion
 ```
 
-`DOCDEX_TEST_PUBLIC_PDF` specifically expects that sample (containing “Dummy PDF
+`CHIEDI_TEST_PUBLIC_PDF` specifically expects that sample (containing “Dummy PDF
 file”). The E2E test copies it to its temporary corpus and verifies retrieval.
 Only the explicit `curl` command accesses the network; tests and application
 processing remain offline, and CI uses generated PDFs without requiring W3C

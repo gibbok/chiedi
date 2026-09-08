@@ -9,9 +9,9 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/gibbok/local-genius/internal/embedding"
-	"github.com/gibbok/local-genius/internal/indexer"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/embedding"
+	"github.com/gibbok/chiedi/internal/indexer"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 func TestStatusKeepsCurrentFailedPathsAcrossReconciliation(t *testing.T) {

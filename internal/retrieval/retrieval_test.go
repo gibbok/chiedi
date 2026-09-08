@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 type fixedEmbedder struct{vectors [][]float32;dimensions int}

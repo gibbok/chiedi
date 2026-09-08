@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gibbok/local-genius/internal/extract"
+	"github.com/gibbok/chiedi/internal/extract"
 )
 
 const (

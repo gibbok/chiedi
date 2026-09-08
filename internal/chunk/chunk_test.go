@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gibbok/local-genius/internal/extract"
+	"github.com/gibbok/chiedi/internal/extract"
 )
 
 func TestDeterministicBoundedChunks(t *testing.T) {

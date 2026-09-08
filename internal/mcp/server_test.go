@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gibbok/local-genius/internal/embedding"
-	"github.com/gibbok/local-genius/internal/indexer"
-	"github.com/gibbok/local-genius/internal/retrieval"
-	"github.com/gibbok/local-genius/internal/store"
+	"github.com/gibbok/chiedi/internal/embedding"
+	"github.com/gibbok/chiedi/internal/indexer"
+	"github.com/gibbok/chiedi/internal/retrieval"
+	"github.com/gibbok/chiedi/internal/store"
 )
 
 func TestProtocolValidationAndInitialize(t *testing.T){

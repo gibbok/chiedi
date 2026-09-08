@@ -24,23 +24,23 @@ import (
 // Valid PDF documents (including JPEG image streams) are generated only in
 // t.TempDir. No corpus bytes or network downloads are part of the repository.
 func TestBuiltBinaryPDFConversion(t *testing.T) {
-	if os.Getenv("DOCDEX_TEST_OCR") != "1" {
-		t.Skip("DOCDEX_TEST_OCR=1 requires real PDF/OCR E2E coverage")
+	if os.Getenv("CHIEDI_TEST_OCR") != "1" {
+		t.Skip("CHIEDI_TEST_OCR=1 requires real PDF/OCR E2E coverage")
 	}
 	if _, err := exec.LookPath("tesseract"); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DOCDEX_PDF_OCR", "auto")
-	t.Setenv("DOCDEX_OCR_LANG", "eng")
+	t.Setenv("CHIEDI_PDF_OCR", "auto")
+	t.Setenv("CHIEDI_OCR_LANG", "eng")
 	_, file, _, _ := runtime.Caller(0)
 	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 	dir := t.TempDir()
-	binary, db := filepath.Join(dir, "docdex"), filepath.Join(dir, "index.db")
+	binary, db := filepath.Join(dir, "chiedi"), filepath.Join(dir, "index.db")
 	// Include headroom for a cold production build; the test still bounds all
 	// CLI/MCP subprocesses so a hung conversion cannot stall the test suite.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/docdex")
+	build := exec.CommandContext(ctx, "go", "build", "-o", binary, "./cmd/chiedi")
 	build.Dir = repo
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
@@ -69,7 +69,7 @@ func TestBuiltBinaryPDFConversion(t *testing.T) {
 	wantJobs := 3
 	// Optional independently authored W3C PDF, downloaded into temp/ by the
 	// caller. Tests stay offline and normal CI never depends on that website.
-	if publicPath := os.Getenv("DOCDEX_TEST_PUBLIC_PDF"); publicPath != "" {
+	if publicPath := os.Getenv("CHIEDI_TEST_PUBLIC_PDF"); publicPath != "" {
 		data, err := os.ReadFile(publicPath)
 		if err != nil {
 			t.Fatal(err)
