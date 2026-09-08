@@ -9,6 +9,7 @@ help: ## Show the available developer commands
 	@printf '%s\n' \
 	  'chiedi developer commands' \
 	  '' \
+	  '  make benchmark    Measure personal-use search performance (opt-in)' \
 	  '  make demo         Build and run a readable local walkthrough' \
 	  '  make test-all     Run every automated verification layer' \
 	  '  make test-e2e     Run the real-binary functional acceptance test' \
@@ -68,3 +69,11 @@ demo: build ## Exercise the CLI and MCP using an isolated temporary corpus
 verify: test-all ## Backward-compatible complete verification alias
 
 verify-full: test-all ## Backward-compatible complete verification alias
+
+BENCHMARK_SIZES ?= 100,500,2000
+BENCHMARK_REPEATS ?= 30
+
+.PHONY: benchmark
+benchmark: ## Explicitly run the personal-use search benchmark (never part of verify)
+	go test -tags benchmark -count=1 ./benchmarks/search
+	go run -tags benchmark ./benchmarks/search -sizes '$(BENCHMARK_SIZES)' -repeats '$(BENCHMARK_REPEATS)'

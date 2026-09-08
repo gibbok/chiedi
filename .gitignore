@@ -21,3 +21,6 @@ go.work.sum
 # Temporary conversion corpora must never be committed
 /temp/
 /tmp/
+
+# Generated performance corpora, SQLite indexes, logs and machine-specific reports
+/benchmarks/output/
