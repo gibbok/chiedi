@@ -157,3 +157,11 @@ Remove `manual-test.db`, `manual-test.db-shm`, and `manual-test.db-wal` when the
 The suite verifies SQLite-vec availability and filtered nearest neighbors (including a relevant source outside the global top 40), vector cleanup on rename/delete/root removal, dimension rejection and rollback, schema-1 migration, non-reused chunk IDs, a writer committing during a retrieval snapshot, FIFO exclusion, MCP object-shaped structured content, and stale references between tool calls. The real-binary MCP check asserts every tool succeeds and returns an object, in addition to checking protocol framing.
 
 SQLite-vec remains an exact scan. The document fixtures are regression evidence, not a general semantic benchmark or a corpus-scale latency guarantee.
+
+## Opt-in performance benchmark
+
+Run `make benchmark` for generated personal-use corpora of 100, 500 and 2,000
+PDF/text documents, measuring full-text-only, vector-only and hybrid retrieval.
+It is intentionally excluded from all normal verification targets.
+See [the benchmark guide](../benchmarks/README.md) for methodology, parameters
+and Git-ignored Markdown reports with execution-machine hardware details.
