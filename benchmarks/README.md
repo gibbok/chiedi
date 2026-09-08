@@ -92,10 +92,11 @@ No application retrieval, model, corpus text or latency workload is changed.
 The existing deterministic `record-00000` filenames are the stable document
 identifiers; SQLite document/chunk IDs are deliberately not used as ground truth.
 
-The versioned suite has 40 queries for every corpus size:
+The quality-v2 suite has 40 queries for every corpus size:
 
-- 20 exact references, each relevant to one document: ten evenly spaced pairs
-  across the archive, covering both TXT and PDF.
+- 20 exact references, each relevant to one document: one pair per topic,
+  spread across the archive and covering both TXT and PDF. Sampling is stratified
+  by topic to avoid a uniform stride repeatedly selecting the same topic.
 - 10 topic queries, relevant to every document generated for that topic.
 - 10 manually specified paraphrases with the same topic judgments. These mix
   shared vocabulary and alternative wording; they are not a blind semantic test.

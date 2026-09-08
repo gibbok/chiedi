@@ -66,11 +66,14 @@ func recordPath(i int) string {
 // Judgments describe the corpus topics, independently of search results or model output.
 func qualityQueries(n int) []qualityQuery {
 	var out []qualityQuery
-	// Ten evenly spaced pairs cover both file formats and the whole archive.
-	for pair := 0; pair < 10; pair++ {
+	// Select one pair per topic, spread across its available archive positions.
+	// A uniform stride can alias the ten-topic cycle (e.g. at 182 documents).
+	for topic := 0; topic < len(topics); topic++ {
+		pairs := (n/2-1-topic)/len(topics) + 1
+		pair := topic + len(topics)*(topic*(pairs-1)/(len(topics)-1))
 		for offset := 0; offset < 2; offset++ {
-			i := 2*(pair*(n/2-1)/9) + offset
-			out = append(out, qualityQuery{fmt.Sprintf("exact-%02d", 2*pair+offset), "exact-reference", fmt.Sprintf("REF%05dS0", i), []string{recordID(i)}})
+			i := 2*pair + offset
+			out = append(out, qualityQuery{fmt.Sprintf("exact-%02d", 2*topic+offset), "exact-reference", fmt.Sprintf("REF%05dS0", i), []string{recordID(i)}})
 		}
 	}
 	paraphrases := []string{
@@ -189,7 +192,7 @@ func qualitySearch(ctx context.Context, s *store.Store, q, mode string) ([]strin
 }
 
 func measureQuality(ctx context.Context, s *store.Store, folder string, n int) (string, error) {
-	fixture := qualityFixture{Version: "corpus-v1/quality-v1", Queries: qualityQueries(n)}
+	fixture := qualityFixture{Version: "corpus-v1/quality-v2", Queries: qualityQueries(n)}
 	byPath := map[string]string{}
 	for i := 0; i < n; i++ {
 		path := recordPath(i)
@@ -268,7 +271,7 @@ func validateFixture(f qualityFixture) error {
 
 func qualityMarkdown(results []qualityResult, hash string) string {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "\n#### Retrieval accuracy\n\nGround truth SHA-256: `%s`. Corpus v1 / quality v1.\n\nDocument-level macro averages; duplicate chunks retain their first rank. Recall@k = relevant documents in the first k unique results / all relevant documents. MRR = mean reciprocal rank of the first relevant document in the returned pool (zero on a miss). Each mode returns at most 40 chunks; hybrid still uses its production 40-candidate budget per retrieval path. MRR is bounded by that pool, not exhaustive corpus MRR. No refill after deduplication.\n\n| Mode | Category | Queries | Recall@1 | Recall@5 | Recall@10 | MRR (40-chunk pool) |\n|---|---|---:|---:|---:|---:|---:|\n", hash)
+	fmt.Fprintf(&b, "\n#### Retrieval accuracy\n\nGround truth SHA-256: `%s`. Corpus v1 / quality v2.\n\nDocument-level macro averages; duplicate chunks retain their first rank. Recall@k = relevant documents in the first k unique results / all relevant documents. MRR = mean reciprocal rank of the first relevant document in the returned pool (zero on a miss). Each mode returns at most 40 chunks; hybrid still uses its production 40-candidate budget per retrieval path. MRR is bounded by that pool, not exhaustive corpus MRR. No refill after deduplication.\n\n| Mode | Category | Queries | Recall@1 | Recall@5 | Recall@10 | MRR (40-chunk pool) |\n|---|---|---:|---:|---:|---:|---:|\n", hash)
 	for _, mode := range []string{"full-text", "vector", "hybrid"} {
 		for _, category := range []string{"all", "exact-reference", "topic", "paraphrase"} {
 			var m qualityMetrics

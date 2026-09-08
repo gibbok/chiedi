@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -62,7 +63,7 @@ func TestCandidateRanking(t *testing.T) {
 }
 
 func TestQualityFixture(t *testing.T) {
-	for _, n := range []int{20, 21, 100, 500, 2000, 10000} {
+	for _, n := range []int{20, 21, 100, 182, 183, 362, 500, 2000, 10000} {
 		f := qualityFixture{Queries: qualityQueries(n)}
 		for i := 0; i < n; i++ {
 			f.Documents = append(f.Documents, qualityDocument{ID: recordID(i), Path: recordPath(i)})
@@ -74,12 +75,30 @@ func TestQualityFixture(t *testing.T) {
 			t.Fatal("unstable query suite")
 		}
 		seen := map[string]bool{}
+		coverage := map[int]map[int]bool{}
 		for _, q := range f.Queries[:20] {
 			id := q.Relevant[0]
 			if seen[id] {
 				t.Fatal("duplicate exact target")
 			}
 			seen[id] = true
+			i, err := strconv.Atoi(strings.TrimPrefix(id, "record-"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			topic := (i / 2) % len(topics)
+			if coverage[topic] == nil {
+				coverage[topic] = map[int]bool{}
+			}
+			coverage[topic][i%2] = true
+			if !strings.Contains(document(i), q.Text) {
+				t.Fatal("reference absent from target document", id)
+			}
+		}
+		for topic := range topics {
+			if len(coverage[topic]) != 2 {
+				t.Fatalf("size %d: topic %d missing a format in exact-reference sample", n, topic)
+			}
 		}
 	}
 	f := qualityFixture{Documents: []qualityDocument{{ID: "a", Path: "a.txt"}}, Queries: []qualityQuery{{ID: "q", Category: "topic", Text: "x", Relevant: []string{"missing"}}}}
