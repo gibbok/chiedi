@@ -53,6 +53,25 @@ docdex version
 
 Use `--db PATH` before the command, or set `DOCDEX_DB`. The default is `docdex.db` in the current directory.
 
+## Locating failed documents
+
+`docdex index` and `docdex reconcile` return `failed_documents` (failures
+encountered in that run) and `failed_document_paths` (their absolute paths).
+An unchanged run reports zero and `[]`, even when previously failed files remain.
+
+For **all currently stored failures**, use `docdex status` or MCP
+`index_status`: `counts.failed_count` is the total and the top-level
+`failed_document_paths` array contains the matching absolute paths, ordered
+by root and relative filename. These paths remain visible across unchanged
+runs and use the canonical registered root (symlinks in the root are resolved).
+The nested `last_reconciliation` describes only the most recent run.
+
+MCP `index_status` reconciles first; CLI `status` reads the stored state
+without rescanning. After fixing, renaming, or deleting a file, run
+`docdex reconcile` before CLI `status`. Use MCP `list_documents` with
+`{"status":"failed"}` to inspect failure reasons. No database rebuild is
+needed to show current failure paths from an existing index.
+
 ## Limits
 
 V1 indexes UTF-8 text, Markdown, and PDFs. PDFium handles PDF text decoding and word spacing; optional local Tesseract OCR reads scanned pages while preserving page citations. See [PDF conversion](docs/pdf-conversion.md) for installation, language settings, limits, and upgrading an existing index. The built-in embedder uses deterministic feature hashing, stemming, and a curated English synonym dictionary. It is not a trained language model and does not provide general semantic understanding. The `embedding.Embedder` interface permits a future local model.

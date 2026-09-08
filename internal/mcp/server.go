@@ -89,8 +89,8 @@ func (s Server) call(ctx context.Context,name string,args json.RawMessage)(any,e
 func decodeArgs(raw json.RawMessage,dst any)error{trimmed:=bytes.TrimSpace(raw);if len(trimmed)==0{return nil};if bytes.Equal(trimmed,[]byte("null")){return fmt.Errorf("arguments must be an object")};dec:=json.NewDecoder(bytes.NewReader(trimmed));dec.DisallowUnknownFields();if err:=dec.Decode(dst);err!=nil{return err};var trailing any;if err:=dec.Decode(&trailing);err!=io.EOF{return fmt.Errorf("arguments must contain exactly one JSON object")};return nil}
 
 func Status(ctx context.Context,s *store.Store)(map[string]any,error){
-	counts,err:=s.Counts(ctx);if err!=nil{return nil,err};last,err:=s.Meta(ctx,"last_reconciliation");if err!=nil{return nil,err};model,err:=s.Meta(ctx,"embedding_model_id");if err!=nil{return nil,err};dimensionsText,err:=s.Meta(ctx,"embedding_dimensions");if err!=nil{return nil,err};dimensions:=0;if dimensionsText!=""{dimensions,err=strconv.Atoi(dimensionsText);if err!=nil{return nil,fmt.Errorf("invalid stored embedding dimensions %q",dimensionsText)}}
-	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts}
+	counts,paths,err:=s.CountsWithFailedPaths(ctx);if err!=nil{return nil,err};last,err:=s.Meta(ctx,"last_reconciliation");if err!=nil{return nil,err};model,err:=s.Meta(ctx,"embedding_model_id");if err!=nil{return nil,err};dimensionsText,err:=s.Meta(ctx,"embedding_dimensions");if err!=nil{return nil,err};dimensions:=0;if dimensionsText!=""{dimensions,err=strconv.Atoi(dimensionsText);if err!=nil{return nil,fmt.Errorf("invalid stored embedding dimensions %q",dimensionsText)}}
+	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts,"failed_document_paths":paths}
 	if last!=""{var parsed any;if err:=json.Unmarshal([]byte(last),&parsed);err!=nil{return nil,fmt.Errorf("invalid stored reconciliation status: %w",err)};result["last_reconciliation"]=parsed}
 	return result,nil
 }
