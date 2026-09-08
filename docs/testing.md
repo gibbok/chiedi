@@ -165,3 +165,10 @@ PDF/text documents, measuring full-text-only, vector-only and hybrid retrieval.
 It is intentionally excluded from all normal verification targets.
 See [the benchmark guide](../benchmarks/README.md) for methodology, parameters
 and Git-ignored Markdown reports with execution-machine hardware details.
+
+
+The same opt-in benchmark now includes deterministic document retrieval accuracy:
+Recall@1/5/10 and MRR within the returned 40-chunk pool, overall and by exact-reference,
+topic and paraphrase category. It writes ground-truth and per-query ranking JSON
+beside the index. Run `go test -tags benchmark -count=1 ./benchmarks/search` for
+metric and fresh-index reproducibility tests without the full performance run.

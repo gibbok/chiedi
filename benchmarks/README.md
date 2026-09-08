@@ -83,3 +83,66 @@ See [the Linux / Xeon Platinum 8573C sample](samples/2026-09-08-linux-xeon-8573c
 for the 100, 500 and 2,000-document run, including vector-only timings and
 execution-machine hardware. This selected report is committed as an example;
 new runs continue to write only to the ignored output directory.
+
+
+## Retrieval accuracy
+
+`make benchmark` also runs an **untimed quality pass** against the same index.
+No application retrieval, model, corpus text or latency workload is changed.
+The existing deterministic `record-00000` filenames are the stable document
+identifiers; SQLite document/chunk IDs are deliberately not used as ground truth.
+
+The versioned suite has 40 queries for every corpus size:
+
+- 20 exact references, each relevant to one document: ten evenly spaced pairs
+  across the archive, covering both TXT and PDF.
+- 10 topic queries, relevant to every document generated for that topic.
+- 10 manually specified paraphrases with the same topic judgments. These mix
+  shared vocabulary and alternative wording; they are not a blind semantic test.
+
+Judgments are derived from the corpus specification before retrieval, never
+from model scores or observed search hits. `ground-truth.json` records the query
+text, category, relevant IDs, relative file paths and SHA-256 of each corpus file.
+Its hash is included in the Markdown report. `quality-results.json` records
+ordered unique document IDs and unrounded per-query metrics for all three modes.
+Both files live under each `<count>/` directory in the ignored output folder.
+
+| Metric | Definition |
+|---|---|
+| Recall@1 / @5 / @10 | Relevant documents in the first k unique retrieved documents divided by **all** relevant documents for that query |
+| MRR (40-chunk pool) | Mean of 1 / rank of the first relevant unique document; zero if none is returned |
+
+The report gives macro averages over queries, both overall and by category.
+Overall results weight each query equally (20 exact, 10 topic, 10 paraphrase),
+not each category equally. A topic can have more than ten relevant documents:
+its Recall@10 ceiling is then 10 / relevant-count. Compare category results and
+corpus sizes with that denominator in mind; recall is not a hit-rate metric.
+
+Full-text and vector search use the existing isolated `Store.Candidates` paths,
+with 40 candidates. The evaluator sorts by `LexicalRank` or `VectorRank`, since
+candidate rows themselves arrive in chunk-ID order. Hybrid uses unmodified
+`Retriever.Retrieve` with a quality-only return limit of 40 (latency still uses
+10), preserving its production ranking and 40-candidate budget per path.
+Duplicate document chunks retain only their first occurrence, before applying
+Recall cutoffs. There is no refill after deduplication. MRR covers only the
+returned pool, **not exhaustive corpus MRR**. Missing results score zero;
+retrieval or invalid-ground-truth errors abort the benchmark.
+
+Reproduce with the same checkout, corpus size, Go version and dependency versions.
+Corpus and query generation use no randomness, network or clock. Ranking ties
+retain production behavior; byte-identical cross-platform floating-point rankings
+are not guaranteed. Tests rebuild separate fresh indexes and compare the quality
+JSON artifacts byte for byte. Timing, hardware and timestamp fields in results.md
+are naturally machine/run dependent.
+
+Run only the benchmark correctness tests with:
+
+```sh
+go test -tags benchmark -count=1 ./benchmarks/search
+```
+
+Tests include known metric examples, chunk-to-document deduplication, SQL rank
+ordering, mode isolation, fixture validation, macro averaging and repeatability
+through real PDF extraction/indexing/retrieval. Quality scores are reported as
+observations, not enforced as arbitrary pass/fail thresholds. The previous
+committed latency sample predates these quality measurements.
