@@ -38,9 +38,9 @@ func TestCLIStatusIncludesPreviouslyFailedPaths(t *testing.T) {
 			Failed int `json:"failed_count"`
 		} `json:"counts"`
 		Paths []string `json:"failed_document_paths"`
-		Last struct {
-			Failed int `json:"failed_documents"`
-			Paths []string `json:"failed_document_paths"`
+		Last  struct {
+			Failed int      `json:"failed_documents"`
+			Paths  []string `json:"failed_document_paths"`
 		} `json:"last_reconciliation"`
 	}
 	if err := json.Unmarshal(run("status"), &status); err != nil {
