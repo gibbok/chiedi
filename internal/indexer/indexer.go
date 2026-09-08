@@ -42,11 +42,8 @@ type Indexer struct {
 
 func (stats *Stats) addFailedDocument(path string) {
 	stats.Failed++
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		absolute = filepath.Clean(path)
-	}
-	stats.FailedDocumentPaths = append(stats.FailedDocumentPaths, absolute)
+	// WalkDir starts at the canonical absolute root saved by Store.AddRoot.
+	stats.FailedDocumentPaths = append(stats.FailedDocumentPaths, path)
 }
 
 func (i Indexer) ValidateCompatibility(ctx context.Context) error {
@@ -107,7 +104,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		}}
 		if found{seen[old.ID]=true;if sameFileMetadata(old,info,identity)&&old.Format==format{return nil}}
 		if info.Size()>extract.MaxFileBytes{
-			stats.addFailedDocument(filepath.Join(root.Path,filepath.FromSlash(rel)));message:=fmt.Sprintf("file exceeds %d-byte limit",extract.MaxFileBytes)
+			stats.addFailedDocument(path);message:=fmt.Sprintf("file exceeds %d-byte limit",extract.MaxFileBytes)
 			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),Format:format,Status:"failed",Error:message});return err
 		}
 		content,err:=readFileBounded(path,extract.MaxFileBytes);if err!=nil{stats.Errors=append(stats.Errors,fmt.Sprintf("%s: %v",rel,err));return nil}
@@ -123,7 +120,7 @@ func (i Indexer) reconcileRoot(ctx context.Context,root store.Root,stats *Stats)
 		afterIdentity:=fileIdentity(after);identityChanged:=identity!=""&&afterIdentity!=""&&identity!=afterIdentity
 		if after.Size()!=info.Size()||after.ModTime().UnixNano()!=info.ModTime().UnixNano()||identityChanged{stats.Errors=append(stats.Errors,fmt.Sprintf("%s changed during indexing; deferred until the next reconciliation",rel));return nil}
 		if extractErr!=nil{
-			stats.addFailedDocument(filepath.Join(root.Path,filepath.FromSlash(rel)))
+			stats.addFailedDocument(path)
 			_,err=i.Store.ReplaceDocument(ctx,store.Replacement{RootID:root.ID,RelativePath:rel,Identity:identity,Size:info.Size(),MtimeNS:info.ModTime().UnixNano(),ContentHash:hash[:],Format:format,Status:"failed",Error:extractErr.Error()})
 			if err!=nil{return err};if found{seen[old.ID]=true};return nil
 		}

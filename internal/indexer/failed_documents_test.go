@@ -2,6 +2,8 @@ package indexer
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,7 +75,7 @@ func TestFailedDocumentsExposeAbsolutePaths(t *testing.T) {
 			if stats.Failed != 1 {
 				t.Fatalf("failed_documents=%d, want 1", stats.Failed)
 			}
-			absolutePath, err := filepath.Abs(path)
+			absolutePath, err := filepath.EvalSymlinks(path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,6 +84,36 @@ func TestFailedDocumentsExposeAbsolutePaths(t *testing.T) {
 			}
 			if stats.FailedDocumentPaths[0] != absolutePath {
 				t.Fatalf("failed_document_paths=%v, want [%q]", stats.FailedDocumentPaths, absolutePath)
+			}
+
+			last, err := database.Meta(ctx, "last_reconciliation")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var persisted Stats
+			if err := json.Unmarshal([]byte(last), &persisted); err != nil {
+				t.Fatal(err)
+			}
+			if persisted.Failed != stats.Failed || !reflect.DeepEqual(persisted.FailedDocumentPaths, stats.FailedDocumentPaths) {
+				t.Fatalf("persisted failures disagree: %+v vs %+v", persisted, stats)
+			}
+			unchanged, err := (Indexer{Store: database, Embedder: embedding.Projection{}}).Reconcile(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if unchanged.Failed != 0 || unchanged.ExtractionJobs != 0 || unchanged.EmbeddingJobs != 0 {
+				t.Fatalf("unchanged file did extra work: %+v", unchanged)
+			}
+			encoded, err := json.Marshal(unchanged)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(encoded, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if string(fields["failed_document_paths"]) != "[]" {
+				t.Fatalf("empty per-run paths must be an array: %s", encoded)
 			}
 		})
 	}

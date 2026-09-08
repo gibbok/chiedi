@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -90,7 +91,18 @@ func decodeArgs(raw json.RawMessage,dst any)error{trimmed:=bytes.TrimSpace(raw);
 
 func Status(ctx context.Context,s *store.Store)(map[string]any,error){
 	counts,err:=s.Counts(ctx);if err!=nil{return nil,err};last,err:=s.Meta(ctx,"last_reconciliation");if err!=nil{return nil,err};model,err:=s.Meta(ctx,"embedding_model_id");if err!=nil{return nil,err};dimensionsText,err:=s.Meta(ctx,"embedding_dimensions");if err!=nil{return nil,err};dimensions:=0;if dimensionsText!=""{dimensions,err=strconv.Atoi(dimensionsText);if err!=nil{return nil,fmt.Errorf("invalid stored embedding dimensions %q",dimensionsText)}}
-	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts}
+	failed, err := s.ListDocuments(ctx, "", "", "failed")
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(failed))
+	for _, document := range failed {
+		paths = append(paths, filepath.Join(document.RootPath, filepath.FromSlash(document.RelativePath)))
+	}
+	// Derive the count from the same query as the paths, even if another
+	// indexing process changed the failures since Counts was read.
+	counts.Failed = len(paths)
+	result:=map[string]any{"db_path":s.Path(),"schema_version":store.SchemaVersion,"embedding_model":model,"embedding_dimensions":dimensions,"counts":counts,"failed_document_paths":paths}
 	if last!=""{var parsed any;if err:=json.Unmarshal([]byte(last),&parsed);err!=nil{return nil,fmt.Errorf("invalid stored reconciliation status: %w",err)};result["last_reconciliation"]=parsed}
 	return result,nil
 }
