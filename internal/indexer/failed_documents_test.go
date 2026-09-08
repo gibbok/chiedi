@@ -3,9 +3,9 @@ package indexer
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/gibbok/local-genius/internal/embedding"
