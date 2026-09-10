@@ -24,9 +24,10 @@ export CHIEDI_DB="$PWD/chiedi.db"
 ./bin/chiedi status
 ```
 
-`add` registers a directory; `index` scans all registered roots. It does not accept
-a directory argument. Search also scans first, so an explicit index is optional
-before subsequent searches.
+`add` registers a directory; `index` scans all registered roots. An extra directory
+argument to `index` is currently ignored: it neither registers nor limits the scan
+to that directory. Use `add` first. Search also scans first, so an explicit index
+is optional before subsequent searches.
 
 ## Command reference
 

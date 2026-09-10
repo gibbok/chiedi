@@ -13,6 +13,11 @@ unchanged.
   registration resolves the root's symlinks first.
 - There is no `.gitignore` integration or configurable exclusion pattern:
   supported files in hidden directories are eligible too. Register roots deliberately.
+- The **64 MiB source-file limit applies to all three formats**, including TXT
+  and Markdown, not just PDFs.
+- Registering the same canonical root twice has no effect. Overlapping roots
+  (a parent and its subdirectory) index shared files separately under each root;
+  there is no cross-root document deduplication.
 - TXT and Markdown require UTF-8 and normalize line endings/trailing whitespace.
 - Markdown recognizes ATX headings (`#` through `######` followed by a space),
   with hierarchy such as `Guide > Setup`; fenced blocks stay in section text.

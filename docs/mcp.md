@@ -32,8 +32,10 @@ CHIEDI_DB=/absolute/path/to/index.db /absolute/path/to/bin/chiedi mcp
 
 ## Tools
 
-Every supported tool reconciles first, including reads and status. A reconciliation
-error fails the call; requests do not silently fall back to stale evidence.
+After validating its arguments, every supported tool reconciles before reading,
+including reads and status. Invalid arguments are rejected without a scan. A
+reconciliation error fails the call; requests do not silently fall back to stale
+evidence.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |

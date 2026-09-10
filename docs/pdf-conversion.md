@@ -13,7 +13,7 @@ Returned passages retain the original PDF page numbers, including gaps for blank
   they are not inferred as Markdown heading hierarchies.
 - In default `auto` mode, use a text layer containing at least one letter or number;
   otherwise inspect/render the page and use Tesseract if it is nonblank.
-- Pages without objects or annotations, or whose raster is entirely white/transparent,
+- Pages with neither objects nor annotations, or whose raster is entirely white/transparent,
   are skipped. The raster check has no tolerance: faint marks and noisy blank scans
   may still require OCR.
 - A page conversion/OCR error fails the whole document with a page-specific reason;
