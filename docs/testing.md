@@ -1,174 +1,103 @@
-# Testing chiedi
+# Development and testing
 
-The repository provides two primary ways to validate the application:
+Use the demo to understand the workflow and the verification gates to check a
+change. Tests exercise local extraction, storage, retrieval, CLI, and MCP behavior.
 
-```bash
-make demo
-make test-all
+[Documentation index](README.md)
+
+## Setup and contribution workflow
+
+- Go 1.25+, GNU Make, and Bash; initial module downloads may need network access.
+- The production binary supports `CGO_ENABLED=0`. The Go race detector requires
+  CGo and a supported C compiler/toolchain.
+- Install Tesseract with English data for real OCR acceptance tests.
+- Follow [AGENTS.md](../AGENTS.md): preserve local processing, provenance, atomic
+  document storage, and embedding reuse; add tests for behavior changes.
+- Prefer the Go standard library and document new dependencies in
+  [DEPENDENCIES.md](../DEPENDENCIES.md), the maintained dependency/license inventory.
+- Direct dependencies: `modernc.org/sqlite` (SQLite/FTS5/vec), `go-pdfium` (PDFium),
+  and wazero (WASM runtime). Exact versions are pinned in [go.mod](../go.mod) and
+  checksums in [go.sum](../go.sum).
+
+Before completion, run both repository-required gates:
+
+```sh
+CHIEDI_TEST_OCR=1 make verify
+CHIEDI_TEST_OCR=1 make verify-full
 ```
 
-Use `make demo` when you want to see the application working. Use `make test-all` before opening, reviewing, or merging a pull request.
+Both are aliases for `test-all` and execute the same full sequence. CI runs both
+with OCR required, checks that `go mod tidy` leaves dependency files unchanged,
+and checks a standalone `CGO_ENABLED=0` build. Without `CHIEDI_TEST_OCR=1`, real
+OCR acceptance coverage is skipped; other PDF regressions still run.
 
-## Prerequisites
+## Verification targets
 
-- Go 1.25 or newer
-- GNU Make
-- Bash for the interactive demo
-- No C compiler is required; the SQLite driver is implemented in pure Go
-- No model server, cloud account, API token, Docker daemon, or network service is required at runtime
+| Target | Purpose |
+| --- | --- |
+| `make deps` | Verify cached modules against checksums |
+| `make test-unit` / `make test` | Run `go test ./...`, including compiled-binary tests; real OCR remains opt-in |
+| `make test-race` / `make race` | Run all default tests under the race detector |
+| `make test-vet` / `make vet` | Run Go static analysis |
+| `make build` | Build `bin/chiedi` |
+| `make test-repeat` | Run indexer and retrieval tests three times |
+| `make test-e2e` | Run compiled-binary acceptance tests verbosely with caching disabled |
+| `make demo` | Build and exercise CLI/MCP against a temporary corpus |
+| `make test-all` | Run all of the above primary targets sequentially |
+| `make benchmark` | Separate opt-in latency/accuracy workload; excluded from verification |
+| `make clean` | Remove `bin/` build output |
+| `make help` | List developer commands |
 
-The first Go build may download the modules recorded in `go.sum`. After the module cache is populated, the application and tests run locally without a document-processing service or model download.
+`test-e2e` sets `CHIEDI_E2E=1`, but the current tests do not read that variable.
+The common binary scenario already runs under ordinary `go test ./...` unless
+`-short` is supplied; the PDF/OCR binary scenario requires `CHIEDI_TEST_OCR=1`.
 
-## Quick interactive demonstration
+## What the tests cover
 
-Run:
+- **Indexing:** unchanged files, single-chunk edits, rename reuse, deletion,
+  metadata-only changes, unavailable roots, incomplete scans, and symlink containment.
+- **Storage:** rollback, concurrent writers, schema migration, vector dimensions
+  and non-finite values, FTS/vector consistency, and non-reused chunk IDs.
+- **Retrieval:** literal path filters, snapshot consistency, curated synonym and
+  identifier regressions, and separate document-level questions.
+- **MCP:** framing, strict arguments, tool schemas/results, bounded neighbors,
+  failure locations, and stale references.
+- **PDFs:** digital and mixed scanned documents, original page citations, malformed
+  files, bounded extraction, cancellation, and OCR errors/reuse.
+- **Acceptance:** build a real executable and drive indexing, search, all MCP
+  tools, concurrent processes, incremental changes, restart, and `doctor`.
 
-```bash
+The 50-case synonym/identifier suite checks 40 known dictionary mappings and 10
+identifiers, requiring the expected source to rank first. It is a regression gate,
+not evidence of general semantic understanding. See [benchmarks](benchmarks.md)
+for document-level accuracy measurements.
+
+## Demo and manual client check
+
+```sh
 make demo
-```
-
-The command builds `bin/chiedi`, creates an isolated temporary directory, and prints each operation and its result. It verifies:
-
-1. database initialization;
-2. root registration;
-3. TXT and Markdown indexing;
-4. unsupported-file exclusion;
-5. status and root inspection;
-6. semantic retrieval using different wording;
-7. exact-reference retrieval;
-8. MCP initialization and tool discovery;
-9. MCP `retrieve`, `read_chunks`, `list_documents`, and `index_status` calls;
-10. automatic reconciliation after a document edit;
-11. rename detection without re-embedding;
-12. deletion cleanup;
-13. malformed-PDF isolation;
-14. restart-compatible retrieval;
-15. database health checking;
-16. root removal.
-
-The temporary files are deleted after a successful or failed run. Preserve them for inspection with:
-
-```bash
 KEEP_DEMO=1 make demo
-```
-
-Use a specific directory instead with:
-
-```bash
 CHIEDI_DEMO_DIR=/tmp/my-chiedi-demo KEEP_DEMO=1 make demo
 ```
 
-When `CHIEDI_DEMO_DIR` is supplied, the directory must be empty and the script never deletes it.
+The demo normally deletes its temporary files. `KEEP_DEMO=1` preserves them;
+a supplied `CHIEDI_DEMO_DIR` must be empty and is never removed by the script.
 
-## Complete automated verification
+For a real MCP host smoke test:
 
-Run:
+1. Build and index a small corpus using [the quick start](getting-started.md).
+2. Configure the client with the same absolute database path and [MCP command](mcp.md).
+3. Confirm all four tools are available; retrieve a known reference and a paraphrase.
+4. Expand a returned chunk and check its root/path, heading, and page citations.
 
-```bash
-make test-all
-```
+## Interpreting failures
 
-This executes the following checks sequentially:
+- Nonzero gate exits block verification; do not weaken a failing test.
+- Deliberately malformed fixtures can have stored failed documents while healthy
+  documents remain searchable.
+- Unchanged reconciliations and pure renames should have zero embedding jobs.
+- Keep test documents/databases out of Git. Benchmark output is ignored separately;
+  explicitly selected sample reports live under `benchmarks/samples/`.
 
-| Make target | What it proves |
-|---|---|
-| `make deps` | Downloaded modules match the committed checksums |
-| `make test-unit` | Unit, integration, protocol, extraction, storage, and indexing tests pass |
-| `make test-race` | Concurrent test execution has no detected data races |
-| `make test-vet` | Go static analysis reports no problems |
-| `make build` | The real `bin/chiedi` executable builds |
-| `make test-repeat` | Incremental indexing and retrieval remain stable across repeated runs |
-| `make test-e2e` | The compiled binary passes the complete functional acceptance scenario |
-| `make demo` | The documented CLI and MCP walkthrough works exactly as shown |
-
-`make verify` and `make verify-full` remain aliases for `make test-all` so CI and older local workflows use the same gate.
-
-The unit layer includes edge-case regressions for empty databases, owner-only database permissions, transactional rollback and restart recovery, concurrent SQLite writers, duplicate relative paths across roots, case-sensitive literal path prefixes containing `%` or `_`, metadata-only and same-timestamp file replacement, cross-format rename, unavailable roots, incomplete permission-constrained scans, symlink containment, cancellation during embedding, chunk overlap, malformed query vectors, non-finite vector values, vector/FTS corruption, oversized reads, strict MCP JSON decoding, invalid tool bounds, and corrupt status metadata.
-
-Retrieval also has a 50-case quality gate: 40 curated-dictionary synonym regressions and 10 exact-identifier cases. Every expected source must rank first. These cases validate known mappings, not general semantic understanding. Separate multi-document fixtures exercise realistic questions without extending the synonym dictionary.
-
-## End-to-end acceptance test
-
-For a focused, verbose acceptance run:
-
-```bash
-make test-e2e
-```
-
-Unlike the shell demonstration, this test creates a valid text-layer PDF and verifies PDF extraction and page provenance. It also tests semantic and exact retrieval, MCP protocol output, incremental embedding counts, rename reuse, deletion, reconciliation idempotence, malformed-PDF containment, restart behavior, and `doctor` using the actual compiled executable.
-
-## Individual checks
-
-During development, run a narrower target:
-
-```bash
-make test-unit
-make test-race
-make test-vet
-make test-repeat
-make build
-```
-
-List all supported targets at any time:
-
-```bash
-make help
-```
-
-## Manual use with your own documents
-
-Keep experiments separate from your normal data by selecting an explicit database:
-
-```bash
-make build
-export CHIEDI_DB="$PWD/manual-test.db"
-./bin/chiedi init
-./bin/chiedi add /absolute/path/to/test-documents
-./bin/chiedi index
-./bin/chiedi status
-./bin/chiedi search "your question"
-./bin/chiedi doctor
-```
-
-## Codex host smoke test
-
-The automated E2E test launches the production MCP binary, completes initialization, sends the initialized notification, pings it, discovers tools, and calls every tool over stdio. A final host-level check requires a locally authenticated Codex installation and therefore is intentionally manual:
-
-1. configure Codex to launch `/absolute/path/bin/chiedi mcp` with `CHIEDI_DB` set to the tested database;
-2. restart or refresh MCP connections in Codex;
-3. confirm the `retrieve`, `read_chunks`, `list_documents`, and `index_status` tools are visible;
-4. ask Codex to retrieve a known exact identifier and a semantic paraphrase from the corpus;
-5. confirm its answer cites the returned root, relative path, heading, or PDF page as applicable.
-
-No API token or per-token OpenAI API configuration is required for `chiedi`; it communicates with the authenticated Codex host over local stdio.
-
-Remove `manual-test.db`, `manual-test.db-shm`, and `manual-test.db-wal` when the experiment is no longer needed.
-
-## Reading failures
-
-- A non-zero command exit means the gate failed.
-- `failed_documents` may be non-zero when a fixture intentionally contains a malformed PDF; healthy documents must remain searchable.
-- `embedding_jobs` must be zero after a pure rename or unchanged reconciliation.
-- After a one-chunk edit, the tests require only the affected chunk to be embedded.
-- Any race-detector, vet, build, protocol, or acceptance failure blocks completion.
-
-## Pre-review regressions
-
-The suite verifies SQLite-vec availability and filtered nearest neighbors (including a relevant source outside the global top 40), vector cleanup on rename/delete/root removal, dimension rejection and rollback, schema-1 migration, non-reused chunk IDs, a writer committing during a retrieval snapshot, FIFO exclusion, MCP object-shaped structured content, and stale references between tool calls. The real-binary MCP check asserts every tool succeeds and returns an object, in addition to checking protocol framing.
-
-SQLite-vec remains an exact scan. The document fixtures are regression evidence, not a general semantic benchmark or a corpus-scale latency guarantee.
-
-## Opt-in performance benchmark
-
-Run `make benchmark` for generated personal-use corpora of 100, 500 and 2,000
-PDF/text documents, measuring full-text-only, vector-only and hybrid retrieval.
-It is intentionally excluded from all normal verification targets.
-See [the benchmark guide](../benchmarks/README.md) for methodology, parameters
-and Git-ignored Markdown reports with execution-machine hardware details.
-
-
-The same opt-in benchmark now includes deterministic document retrieval accuracy:
-Recall@1/5/10 and MRR within the returned 40-chunk pool, overall and by exact-reference,
-topic and paraphrase category. It writes ground-truth and per-query ranking JSON
-beside the index. Run `go test -tags benchmark -count=1 ./benchmarks/search` for
-metric and fresh-index reproducibility tests without the full performance run.
+Implementation: [Makefile](../Makefile), [CI](../.github/workflows/verify.yml),
+[demo](../scripts/demo.sh), [E2E](../internal/e2e/e2e_test.go).
