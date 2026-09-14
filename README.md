@@ -3,7 +3,7 @@
 **Find the evidence in your documents. Bring it into your developer workflow.**
 
 `chiedi` makes local Markdown, text files, and PDFs searchable from your terminal
-and available to Codex through MCP, with source paths, headings, and PDF page references.
+and available to Codex or other AI Agent Harnesses through MCP, with source paths, headings, and PDF page references.
 
 Built in Go, with SQLite FTS5, exact vector search, and deterministic local embeddings.
 
