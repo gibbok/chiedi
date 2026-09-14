@@ -17,3 +17,8 @@ Native archive SHA-256 values come from upstream release metadata. Setup records
 model/tokenizer/runtime checksums for load-time integrity checks. Bundles carry
 the native runtime's license/third-party notices and the model/tokenizer licenses.
 See [installation](docs/embedding.md).
+
+CI-only numerical reference: NumPy 2.2.6, ONNX Runtime Python 1.23.2, and
+Hugging Face tokenizers Python 0.22.2, installed into an isolated virtual environment.
+These validate the native tokenizer/pooling pipeline; they are not application
+or source-build dependencies.

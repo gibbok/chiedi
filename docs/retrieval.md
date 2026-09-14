@@ -48,7 +48,11 @@ on language, context and domain; it is not a calibrated confidence score.
 
 FTS5 provides exact-term matching over chunk text, heading, and relative path.
 
-- Build quoted, distinct query terms of at least two runes, joined with `OR`.
+- Build quoted, distinct query terms of at least two runes, joined with `AND`.
+- Require all query terms for the lexical channel. This prevents a few shared
+  grammatical words from boosting an unrelated passage above a cross-language
+  semantic match. Natural-language questions can rely on E5 when the complete
+  wording is absent; exact identifiers and keyword conjunctions retain FTS support.
 - If none remain, use a sentinel term (`__no_match__`).
 - Order matches by SQLite `bm25(chunks_fts)` ascending, with default column weights.
 - User input is converted into terms; it is not passed through as an advanced FTS

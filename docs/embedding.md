@@ -46,7 +46,8 @@ executable resolves symlinks and never loads libraries from the current director
 
 - Query inputs use `query: `; passage inputs use `passage: `, in every language.
 - Original query wording reaches E5, including punctuation and stopwords.
-  Keyword search independently tokenizes the question.
+  Keyword search independently tokenizes the question and requires all terms,
+  so partial matches on grammatical words do not overwhelm cross-language results.
 - Each input uses the pinned tokenizer and has at most 512 tokens per native call,
   including its task prefix and special tokens.
 - Longer inputs are split into contiguous token windows. Each window retains the
@@ -83,7 +84,10 @@ Tests use the actual bundled model and never download from inside test code.
 
 Embedding coverage includes cross-language queries, relevance against distractors,
 normalized finite output, full token-window coverage, long tails, concurrency,
-cancellation and corrupt assets. Benchmarks use the production E5 paths, report
+cancellation and corrupt assets. CI also compares native vectors against an
+independent Python tokenizer/ONNX mean-pooling reference for five multilingual
+query/passage inputs. Reference dependencies are isolated in a CI virtual
+environment and are not installed with Chiedi. Benchmarks use the production E5 paths, report
 cold initialization separately, and measure English, Italian-to-English and
 Czech-to-English retrieval quality. Run:
 

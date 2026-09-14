@@ -67,7 +67,7 @@ The common binary scenario already runs under ordinary `go test ./...` unless
 - **Acceptance:** build a real executable and drive indexing, search, all MCP
   tools, concurrent processes, incremental changes, restart, and `doctor`.
 
-The 50-case synonym/identifier suite checks 40 legacy synonym relationships and 10
+The 50-case synonym/identifier suite checks 40 legacy synonym relationships using explanatory passages and disambiguating query context and 10
 identifiers, requiring the expected source to rank first. It is a regression gate,
 not evidence of general semantic understanding. See [benchmarks](benchmarks.md)
 for document-level accuracy measurements.

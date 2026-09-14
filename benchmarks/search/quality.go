@@ -82,8 +82,8 @@ func qualityQueries(n int) []qualityQuery {
 		"codebase storage migration", "utility water consumption", "worker wage agreement",
 		"planting irrigation tools", "furniture appliance cost",
 	}
- italian := []string{"isolamento del tetto", "prenotazione albergo per le vacanze", "riparazione automobile", "pagamento della scuola", "visita medica", "migrazione del database", "bolletta del riscaldamento", "ferie e stipendio", "attrezzatura da giardino", "prezzo degli elettrodomestici"}
- czech := []string{"izolace střechy", "rezervace hotelu na dovolenou", "oprava automobilu", "platba školného", "lékařské vyšetření", "migrace databáze", "účet za vytápění", "dovolená a mzda", "zahradní vybavení", "cena domácích spotřebičů"}
+	italian := []string{"isolamento del tetto", "prenotazione albergo per le vacanze", "riparazione automobile", "pagamento della scuola", "visita medica", "migrazione del database", "bolletta del riscaldamento", "ferie e stipendio", "attrezzatura da giardino", "prezzo degli elettrodomestici"}
+	czech := []string{"izolace střechy", "rezervace hotelu na dovolenou", "oprava automobilu", "platba školného", "lékařské vyšetření", "migrace databáze", "účet za vytápění", "dovolená a mzda", "zahradní vybavení", "cena domácích spotřebičů"}
 	for topic, q := range queries {
 		var relevant []string
 		for i := 0; i < n; i++ {
@@ -180,7 +180,7 @@ func qualitySearch(ctx context.Context, s *store.Store, q, mode string) ([]strin
 		return paths, nil
 	}
 	vector := make([]float32, e.Dimensions())
-	fts := `"` + strings.Join(strings.Fields(q), `" OR "`) + `"`
+	fts := `"` + strings.Join(strings.Fields(q), `" AND "`) + `"`
 	if mode == "vector" {
 		vectors, err := e.EmbedQuery(ctx, []string{q})
 		if err != nil {
