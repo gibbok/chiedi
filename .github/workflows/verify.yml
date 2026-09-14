@@ -19,6 +19,7 @@ jobs:
     env:
       CHIEDI_TEST_OCR: '1'
       CHIEDI_ASSETS: ${{ github.workspace }}/bin/assets
+      CHIEDI_E5_REFERENCE: ${{ github.workspace }}/.deps/e5-reference.json
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -27,6 +28,11 @@ jobs:
           cache: true
       - name: Prepare native E5 assets
         run: make setup
+      - name: Generate independent E5 reference
+        run: |
+          python3 -m venv "$RUNNER_TEMP/e5-reference"
+          "$RUNNER_TEMP/e5-reference/bin/pip" install numpy==2.2.6 onnxruntime==1.23.2 tokenizers==0.22.2
+          "$RUNNER_TEMP/e5-reference/bin/python" scripts/e5-reference.py
       - name: Verify dependency metadata
         run: |
           go mod tidy
@@ -62,7 +68,7 @@ jobs:
         with:
           name: e5-benchmark-${{ matrix.os }}
           path: |
-            benchmarks/output/**/report.md
+            benchmarks/output/**/*.md
             benchmarks/output/**/quality-results.json
             benchmarks/output/**/ground-truth.json
           retention-days: 3

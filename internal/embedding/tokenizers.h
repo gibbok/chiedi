@@ -1,3 +1,5 @@
+// C ABI declarations from daulet/tokenizers v1.27.0 (Apache-2.0).
+// https://github.com/daulet/tokenizers/blob/v1.27.0/tokenizers.h
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>

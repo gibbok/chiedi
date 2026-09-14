@@ -96,3 +96,19 @@ func BenchmarkE5Query(b *testing.B) {
  b.ResetTimer()
  for i:=0;i<b.N;i++{if _,err:=e.EmbedQuery(ctx,[]string{"Quanti giorni di ferie spettano ai dipendenti?"});err!=nil{b.Fatal(err)}}
 }
+
+func TestE5MatchesIndependentReference(t *testing.T) {
+ path:=os.Getenv("CHIEDI_E5_REFERENCE")
+ if path=="" {t.Skip("CI supplies the independent Python ONNX/tokenizer reference")}
+ raw,err:=os.ReadFile(path);if err!=nil{t.Fatal(err)}
+ var cases []struct{Kind string;Text string;Vector []float32}
+ if err=json.Unmarshal(raw,&cases);err!=nil{t.Fatal(err)}
+ if len(cases)<5{t.Fatal("incomplete independent reference")}
+ for _,tc:=range cases{
+  var got [][]float32
+  if tc.Kind=="query"{got,err=(E5{}).EmbedQuery(context.Background(),[]string{tc.Text})}else{got,err=(E5{}).Embed(context.Background(),[]string{tc.Text})}
+  if err!=nil{t.Fatal(err)}
+  if len(tc.Vector)!=dimensions{t.Fatal("invalid reference dimensions")}
+  for i,want:=range tc.Vector{if math.Abs(float64(got[0][i]-want))>2e-4{t.Fatalf("%s coordinate %d: got %g want %g",tc.Text,i,got[0][i],want)}}
+ }
+}

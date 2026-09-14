@@ -2,14 +2,12 @@
 """Prepare pinned build assets; document processing itself never uses the network."""
 import hashlib
 import json
-import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 import time
 import urllib.request
 

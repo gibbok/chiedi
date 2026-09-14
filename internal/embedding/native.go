@@ -126,7 +126,7 @@ func embedTexts(ctx context.Context,texts []string,prefix string) ([][]float32,e
   e,err := openNative(dir); if err != nil { return nil,err }
   processEngine = e
  }
- prefixIDs,err := nativeTokens(processEngine,prefix); if err != nil { return nil,err }
+ prefixIDs,err := nativeTokens(processEngine,strings.TrimSpace(prefix)); if err != nil { return nil,err }
  for i,text := range texts {
   if err := ctx.Err(); err != nil { return nil,err }
   out[i] = make([]float32,dimensions)
