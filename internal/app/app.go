@@ -27,7 +27,7 @@ func Run(ctx context.Context,args []string,stdin io.Reader,stdout,stderr io.Writ
 	if command=="version"{fmt.Fprintln(stdout,"chiedi "+Version);return 0}
 	known:=map[string]bool{"init":true,"add":true,"remove":true,"roots":true,"index":true,"reconcile":true,"search":true,"status":true,"doctor":true,"mcp":true};if !known[command]{usage(stderr);fmt.Fprintf(stderr,"chiedi: unknown command %q\n",command);return 2}
 	s,err:=store.Open(ctx,*dbPath);if err!=nil{fmt.Fprintln(stderr,"chiedi:",err);return 1};defer s.Close()
-	embedder:=embedding.Projection{};idx:=indexer.Indexer{Store:s,Embedder:embedder};ret:=retrieval.Retriever{Store:s,Embedder:embedder}
+	embedder:=embedding.E5{};idx:=indexer.Indexer{Store:s,Embedder:embedder};ret:=retrieval.Retriever{Store:s,Embedder:embedder}
 	fail:=func(err error)int{fmt.Fprintln(stderr,"chiedi:",err);return 1}
 	switch command{
 	case "init":fmt.Fprintln(stdout,s.Path());return 0

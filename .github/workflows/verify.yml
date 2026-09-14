@@ -10,23 +10,60 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     env:
       CHIEDI_TEST_OCR: '1'
+      CHIEDI_ASSETS: ${{ github.workspace }}/bin/assets
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
           cache: true
+      - name: Prepare native E5 assets
+        run: make setup
       - name: Verify dependency metadata
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum || { cat go.mod; cat go.sum; exit 1; }
       - name: Install local PDF OCR test dependency
-        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+        run: |
+          if [ "$(uname -s)" = Darwin ]; then
+            brew install tesseract
+          else
+            sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+          fi
       - run: make verify
       - run: make verify-full
-      - name: Verify standalone pure-Go build
-        run: CGO_ENABLED=0 make build
+      - name: Measure E5 and retrieval performance
+        run: |
+          go test -run '^
+ -bench BenchmarkE5Query -benchtime=3x ./internal/embedding
+          make benchmark BENCHMARK_SIZES=20 BENCHMARK_REPEATS=1
+      - name: Build installation bundle
+        run: make package
+      - name: Smoke test relocated installation
+        run: |
+          mkdir -p "$RUNNER_TEMP/chiedi-install"
+          PREFIX="$RUNNER_TEMP/chiedi-install" bash scripts/install.sh
+          unset CHIEDI_ASSETS
+          cd "$RUNNER_TEMP"
+          mkdir -p smoke-corpus
+          echo 'Employees have twenty days of paid vacation.' > smoke-corpus/leave.txt
+          "$RUNNER_TEMP/chiedi-install/bin/chiedi" --db smoke.db add "$RUNNER_TEMP/smoke-corpus"
+          "$RUNNER_TEMP/chiedi-install/bin/chiedi" --db smoke.db search 'Quanti giorni di ferie?' | tee smoke-result.txt
+          grep -q 'leave.txt' smoke-result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e5-benchmark-${{ matrix.os }}
+          path: |
+            benchmarks/output/**/report.md
+            benchmarks/output/**/quality-results.json
+            benchmarks/output/**/ground-truth.json
+          retention-days: 3

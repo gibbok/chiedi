@@ -1,189 +1,70 @@
+// Package embedding provides offline multilingual document and query embeddings.
 package embedding
 
 import (
-	"context"
-	"errors"
-	"hash/fnv"
-	"math"
-	"strings"
-	"unicode"
+ "context"
+ "errors"
+ "math"
 )
 
 const dimensions = 384
 
-// Embedder is the replaceable local embedding boundary.
+// Embed embeds passages. QueryEmbedder distinguishes the asymmetric query task.
 type Embedder interface {
-	ID() string
-	Dimensions() int
-	Embed(context.Context, []string) ([][]float32, error)
+ ID() string
+ Dimensions() int
+ Embed(context.Context, []string) ([][]float32, error)
 }
 
-// Projection is a compact, deterministic local semantic projection model. It
-// hashes normalized lexical and concept features into a dense signed vector.
-// The concept normalization gives useful English synonym recall without a
-// model download, while the interface permits a GGUF-backed model later.
-type Projection struct{}
-
-func (Projection) ID() string      { return "builtin-semantic-projection-en-v2" }
-func (Projection) Dimensions() int { return dimensions }
-
-var conceptNamespaces = [...]string{
-	"concept:",
-	"meaning:",
-	"topic:",
-	"intent:",
-	"semantic:",
+type QueryEmbedder interface {
+ EmbedQuery(context.Context, []string) ([][]float32, error)
 }
 
-func (Projection) Embed(ctx context.Context, texts []string) ([][]float32, error) {
-	if texts == nil {
-		return nil, nil
-	}
-	out := make([][]float32, len(texts))
-	for i, text := range texts {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		out[i] = project(text)
-	}
-	return out, nil
+// EmbedQueries allows deterministic test doubles without a separate query method.
+func EmbedQueries(ctx context.Context, e Embedder, texts []string) ([][]float32, error) {
+ if q, ok := e.(QueryEmbedder); ok { return q.EmbedQuery(ctx, texts) }
+ return e.Embed(ctx, texts)
 }
 
-func project(text string) []float32 {
-	v := make([]float32, dimensions)
-	tokens := tokenize(text)
-	for i, token := range tokens {
-		add(v, "word:"+token, 1)
-		concept := canonical(token)
-		_, knownConcept := concepts[token]
-		if knownConcept || concept != token {
-			// A single signed hash can collide with and cancel an otherwise
-			// relevant concept. Project recognized synonyms and stems through
-			// several independent namespaces so one collision cannot erase the
-			// semantic signal. Ordinary words retain one concept feature so
-			// boilerplate does not gain disproportionate weight.
-			for _, namespace := range conceptNamespaces {
-				add(v, namespace+concept, 1.7)
-			}
-		} else {
-			add(v, "concept:"+concept, 1.7)
-		}
-		if i > 0 {
-			add(v, "pair:"+canonical(tokens[i-1])+"_"+concept, .35)
-		}
-	}
-	var norm float64
-	for _, x := range v {
-		norm += float64(x * x)
-	}
-	if norm > 0 {
-		scale := float32(1 / math.Sqrt(norm))
-		for i := range v {
-			v[i] *= scale
-		}
-	}
-	return v
-}
+// E5 uses one lazy, serialized native session per process. The OS releases that
+// process-owned session at exit; individual calls release all temporary tensors.
+// Merely constructing E5 (status, unchanged reconciliation) loads no model.
+type E5 struct{}
 
-func add(v []float32, feature string, weight float32) {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(feature))
-	n := h.Sum64()
-	idx := int(n % uint64(len(v)))
-	if n&(1<<63) != 0 {
-		weight = -weight
-	}
-	v[idx] += weight
+func (E5) ID() string { return "intfloat/multilingual-e5-small-ccc66d3-int8-window-v1" }
+func (E5) Dimensions() int { return dimensions }
+func (E5) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+ return embedTexts(ctx, texts, "passage: ")
 }
-
-func tokenize(s string) []string {
-	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
-	})
-}
-
-var concepts = map[string]string{
-	"vacation": "leave", "vacations": "leave", "holiday": "leave", "holidays": "leave",
-	"leave": "leave", "annual": "leave", "pto": "leave",
-	"worker": "employee", "workers": "employee", "employee": "employee", "employees": "employee", "staff": "employee",
-	"receive": "entitlement", "receives": "entitlement", "get": "entitlement", "gets": "entitlement",
-	"entitled": "entitlement", "entitlement": "entitlement", "eligible": "entitlement",
-	"terminate": "termination", "terminated": "termination", "termination": "termination", "cancel": "termination", "cancellation": "termination",
-	"agreement": "contract", "agreements": "contract", "contract": "contract", "contracts": "contract",
-	"purchase": "buy", "purchased": "buy", "buy": "buy", "bought": "buy",
-	"cost": "price", "costs": "price", "price": "price", "pricing": "price",
-	"deadline": "due", "due": "due", "expires": "due", "expiry": "due",
-	"rapid": "fast", "quick": "fast", "quickly": "fast", "fast": "fast", "performance": "fast",
-	"automobile": "vehicle", "car": "vehicle",
-	"physician": "medical-professional", "doctor": "medical-professional",
-	"child": "child", "kid": "child",
-	"residence": "home", "home": "home",
-	"occupation": "job", "job": "job",
-	"defect": "bug", "bug": "bug",
-	"begin": "start", "start": "start",
-	"finish": "complete", "complete": "complete",
-	"secure": "safe", "safe": "safe",
-	"assist": "help", "help": "help",
-	"acquire": "obtain", "obtain": "obtain",
-	"require": "need", "need": "need",
-	"configure": "setup", "setup": "setup",
-	"remove": "delete", "delete": "delete",
-	"create": "generate", "generate": "generate",
-	"change": "modify", "modify": "modify",
-	"folder": "directory", "directory": "directory",
-	"repository": "codebase", "codebase": "codebase",
-	"search": "locate", "locate": "locate",
-	"salary": "wage", "wage": "wage",
-	"customer": "client", "client": "client",
-	"repair": "fix", "fix": "fix",
-	"incorrect": "wrong", "wrong": "wrong",
-	"permit": "allow", "allow": "allow",
-	"prohibit": "forbid", "forbid": "forbid",
-	"select": "choose", "choose": "choose",
-	"display": "show", "show": "show",
-	"conceal": "hide", "hide": "hide",
-	"authenticate": "login", "login": "login",
-	"credential": "password", "password": "password",
-	"execute": "run", "run": "run",
-	"stop": "halt", "halt": "halt",
-	"previous": "prior", "prior": "prior",
-	"next": "following", "following": "following",
-	"small": "tiny", "tiny": "tiny",
-	"large": "huge", "huge": "huge",
-	"message": "notification", "notification": "notification",
-	"network": "internet", "internet": "internet",
-	"database": "storage", "storage": "storage",
-}
-
-func canonical(token string) string {
-	if c, ok := concepts[token]; ok {
-		return c
-	}
-	for _, suffix := range []string{"ingly", "edly", "ing", "ed", "es", "s"} {
-		if strings.HasSuffix(token, suffix) && len(token) > len(suffix)+3 {
-			return strings.TrimSuffix(token, suffix)
-		}
-	}
-	return token
+func (E5) EmbedQuery(ctx context.Context, texts []string) ([][]float32, error) {
+ return embedTexts(ctx, texts, "query: ")
 }
 
 // Cosine returns cosine similarity for normalized or unnormalized vectors.
 func Cosine(a, b []float32) (float64, error) {
-	if len(a) == 0 || len(a) != len(b) {
-		return 0, errors.New("vectors must have the same non-zero dimensions")
-	}
-	var dot, aa, bb float64
-	for i := range a {
-		x, y := float64(a[i]), float64(b[i])
-		if math.IsNaN(x)||math.IsInf(x,0)||math.IsNaN(y)||math.IsInf(y,0){
-			return 0, errors.New("vectors must contain only finite values")
-		}
-		dot += x * y
-		aa += x * x
-		bb += y * y
-	}
-	if aa == 0 || bb == 0 {
-		return 0, nil
-	}
-	return dot / math.Sqrt(aa*bb), nil
+ if len(a) == 0 || len(a) != len(b) {
+  return 0, errors.New("vectors must have the same non-zero dimensions")
+ }
+ var dot, aa, bb float64
+ for i := range a {
+  x, y := float64(a[i]), float64(b[i])
+  if math.IsNaN(x) || math.IsInf(x,0) || math.IsNaN(y) || math.IsInf(y,0) {
+   return 0, errors.New("vectors must contain only finite values")
+  }
+  dot += x*y; aa += x*x; bb += y*y
+ }
+ if aa == 0 || bb == 0 { return 0,nil }
+ return dot/math.Sqrt(aa*bb),nil
+}
+
+func normalize(v []float32) error {
+ var norm float64
+ for _, x := range v {
+  if math.IsNaN(float64(x)) || math.IsInf(float64(x),0) { return errors.New("non-finite model output") }
+  norm += float64(x)*float64(x)
+ }
+ if norm == 0 { return errors.New("zero model output") }
+ scale := 1/math.Sqrt(norm)
+ for i := range v { v[i] = float32(float64(v[i])*scale) }
+ return nil
 }

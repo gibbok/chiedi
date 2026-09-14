@@ -163,7 +163,7 @@ func rankedCandidates(c []store.Candidate, mode string) ([]string, error) {
 }
 
 func qualitySearch(ctx context.Context, s *store.Store, q, mode string) ([]string, error) {
-	e := embedding.Projection{}
+	e := embedding.E5{}
 	if mode == "hybrid" {
 		hits, err := (retrieval.Retriever{Store: s, Embedder: e}).Retrieve(ctx, q, "", qualityLimit)
 		if err != nil {
@@ -178,7 +178,7 @@ func qualitySearch(ctx context.Context, s *store.Store, q, mode string) ([]strin
 	vector := make([]float32, e.Dimensions())
 	fts := `"` + strings.Join(strings.Fields(q), `" OR "`) + `"`
 	if mode == "vector" {
-		vectors, err := e.Embed(ctx, []string{q})
+		vectors, err := e.EmbedQuery(ctx, []string{q})
 		if err != nil {
 			return nil, err
 		}

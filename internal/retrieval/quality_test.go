@@ -26,7 +26,7 @@ func TestFiftyCaseRetrievalQualityGate(t *testing.T){
 		{"large","huge"},{"message","notification"},{"network","internet"},{"database","storage"},{"purchase","buy"},
 	}
 	cases:=make([]qualityCase,0,50);for n,pair:=range pairs{cases=append(cases,qualityCase{question:"What does "+pair[0]+" mean here?",source:pair[1],path:fmt.Sprintf("semantic-%02d.txt",n)})};for n:=0;n<10;n++{reference:=fmt.Sprintf("QA-ZX-%04d",9000+n);cases=append(cases,qualityCase{question:reference,source:"Exact reference "+reference,path:fmt.Sprintf("identifier-%02d.txt",n)})};if len(cases)!=50{t.Fatalf("quality dataset has %d cases, want 50",len(cases))}
-	ctx:=context.Background();root:=t.TempDir();for _,test:=range cases{if err:=os.WriteFile(filepath.Join(root,test.path),[]byte(test.source),0o600);err!=nil{t.Fatal(err)}};s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"quality.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};embedder:=embedding.Projection{};stats,err:=(indexer.Indexer{Store:s,Embedder:embedder}).Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.EmbeddingJobs!=len(cases){t.Fatalf("indexed %d embeddings, want %d",stats.EmbeddingJobs,len(cases))};retriever:=Retriever{Store:s,Embedder:embedder}
+	ctx:=context.Background();root:=t.TempDir();for _,test:=range cases{if err:=os.WriteFile(filepath.Join(root,test.path),[]byte(test.source),0o600);err!=nil{t.Fatal(err)}};s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"quality.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};embedder:=embedding.E5{};stats,err:=(indexer.Indexer{Store:s,Embedder:embedder}).Reconcile(ctx);if err!=nil{t.Fatal(err)};if stats.EmbeddingJobs!=len(cases){t.Fatalf("indexed %d embeddings, want %d",stats.EmbeddingJobs,len(cases))};retriever:=Retriever{Store:s,Embedder:embedder}
 	for n,test:=range cases{t.Run(fmt.Sprintf("%02d_%s",n,test.path),func(t *testing.T){results,err:=retriever.Retrieve(ctx,test.question,"",3);if err!=nil{t.Fatal(err)};if len(results)==0||results[0].Path!=test.path{t.Fatalf("question %q: top results=%+v, want %s",test.question,results,test.path)}})}
 }
 
@@ -41,7 +41,7 @@ func TestDocumentQuestionRegression(t *testing.T){
   {"What happens after three failed login attempts?","After three failed login attempts the account is locked for fifteen minutes.","security.txt"},
  }
  ctx:=context.Background();root:=t.TempDir();for _,c:=range cases{if err:=os.WriteFile(filepath.Join(root,c.path),[]byte(c.source),0600);err!=nil{t.Fatal(err)}}
- s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"documents.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};e:=embedding.Projection{}
+ s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"documents.db"));if err!=nil{t.Fatal(err)};defer s.Close();if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)};e:=embedding.E5{}
  if _,err:=(indexer.Indexer{Store:s,Embedder:e}).Reconcile(ctx);err!=nil{t.Fatal(err)}
  for _,c:=range cases{hits,err:=(Retriever{Store:s,Embedder:e}).Retrieve(ctx,c.question,"",1);if err!=nil||len(hits)!=1||hits[0].Path!=c.path||hits[0].Text!=c.source{t.Fatalf("%s: %+v %v",c.question,hits,err)}}
 }
