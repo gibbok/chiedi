@@ -11,7 +11,7 @@ Built in Go, with SQLite FTS5, exact vector search, and deterministic local embe
 
 - **Find project decisions:** locate a migration note, design rationale, or deployment checklist across your Markdown documentation.
 - **Look up a reference:** search for a release identifier or a phrase buried in a PDF manual.
-- **Give Codex source material:** retrieve relevant passages and nearby context for answers you can check against the originals.
+- **Give your harness source material:** retrieve relevant passages and nearby context for answers you can check against the originals.
 - **Keep a working archive searchable:** pick your folders; searches reconcile additions, edits, renames, and deletions automatically.
 
 ## Why chiedi?
