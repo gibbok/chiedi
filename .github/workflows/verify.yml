@@ -42,8 +42,7 @@ jobs:
       - run: make verify-full
       - name: Measure E5 and retrieval performance
         run: |
-          go test -run '^
- -bench BenchmarkE5Query -benchtime=3x ./internal/embedding
+          go test -run '^$' -bench BenchmarkE5Query -benchtime=3x ./internal/embedding
           make benchmark BENCHMARK_SIZES=20 BENCHMARK_REPEATS=1
       - name: Build installation bundle
         run: make package
