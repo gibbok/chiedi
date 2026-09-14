@@ -1,7 +1,7 @@
 # Architecture
 
 Chiedi is one Go executable with two entry points: terminal commands and MCP
-stdio. Both use the same indexing, retrieval, and SQLite layers.
+stdio, with model and native runtime assets beside the executable. Both use the same indexing, retrieval, and SQLite layers.
 
 [Documentation index](README.md)
 
@@ -42,7 +42,7 @@ protects database evidence consistency, not a frozen view of the filesystem.
 | [`internal/source`](../internal/source/open.go) | Open regular source files; nonblocking open flags on Unix |
 | [`internal/extract`](../internal/extract/extract.go) | TXT/Markdown sections and PDF/OCR conversion |
 | [`internal/chunk`](../internal/chunk/chunk.go) | Bounded chunks, provenance, and embedding-input hashes |
-| [`internal/embedding`](../internal/embedding/embedding.go) | Embedder interface and deterministic projection |
+| [`internal/embedding`](../internal/embedding/embedding.go) | E5 query/passage embeddings, native C inference, asset integrity |
 | [`internal/indexer`](../internal/indexer/indexer.go) | Reconciliation, change detection, and reuse |
 | [`internal/store`](../internal/store/store.go) | SQLite schema, atomic mutations, FTS, vectors, and evidence reads |
 | [`internal/retrieval`](../internal/retrieval/retrieval.go) | Query preparation and rank fusion |
@@ -65,8 +65,8 @@ protects database evidence consistency, not a frozen view of the filesystem.
 
 These are code extension points, not runtime plugin settings:
 
-- Replace `embedding.Embedder` (`ID`, `Dimensions`, `Embed`) and update component
-  wiring. A changed embedding identity/dimension requires a compatible fresh index.
+- Replace `embedding.Embedder` (`ID`, `Dimensions`, passage `Embed`) and optionally
+  implement `QueryEmbedder.EmbedQuery` for asymmetric retrieval. A changed embedding identity/dimension requires a compatible fresh index.
 - Add formats in both extraction dispatch and the indexer's extension allowlist;
   preserve heading/page provenance and bounded reads.
 - Change retrieval scoring in `internal/retrieval`, then check relevance and

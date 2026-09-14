@@ -15,8 +15,8 @@ install: build ## Install executable and assets under ~/.local (override PREFIX)
 package: build ## Make a relocatable release archive for the current platform
 	mkdir -p dist
 	cp scripts/install.sh bin/install.sh
-	printf '%s\n' 'Run: bash install.sh "$(pwd)"' > bin/INSTALL.txt
-	tar -czf dist/chiedi-$(go env GOOS)-$(go env GOARCH).tar.gz -C bin chiedi assets install.sh INSTALL.txt
+	printf '%s\n' 'Run: bash install.sh "$$(pwd)"' > bin/INSTALL.txt
+	tar -czf dist/chiedi-$$(go env GOOS)-$$(go env GOARCH).tar.gz -C bin chiedi assets install.sh INSTALL.txt
 
 
 .PHONY: help build clean deps test test-unit test-race race test-vet vet test-repeat test-e2e test-all demo verify verify-full

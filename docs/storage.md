@@ -39,7 +39,7 @@ It can be rebuilt from registered source folders; keeping those originals is ess
   sidecars, backups, and exported results as sensitive document data.
 - The database is not encrypted by the application. Use an appropriately protected
   local directory and operating-system storage controls.
-- Chiedi has no telemetry or document-processing network calls. Initial module or
+- Chiedi has no telemetry or document-processing network calls. Initial module, native model/runtime or
   OCR installation can need network access; the MCP host controls onward use of evidence.
 - PDFium caches compiled engine code under the OS user cache in `chiedi/pdfium`,
   without source document data. OCR page images pass through memory/stdin.
@@ -77,7 +77,9 @@ Start with the stored view, then explicitly refresh if needed:
 
 Schema-1 indexes migrate to schema 2 transactionally without re-embedding. Newer
 unsupported schemas are rejected. Model identity and dimension mismatches are
-rejected rather than mixing incompatible vectors.
+rejected rather than mixing incompatible vectors. In particular, upgrading from
+`builtin-semantic-projection-en-v2` to E5 requires a new index, despite both having
+384 dimensions. The original index remains readable by the previous application.
 
 Changes to OCR settings, installed languages, or extraction behavior do not
 invalidate unchanged files. There is no force-reindex command. For a full refresh:

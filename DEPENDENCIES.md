@@ -7,4 +7,13 @@
 
 Transitive packages are recorded by `go mod tidy` in `go.mod` and checked by `go.sum`. They support SQLite, PDFium worker pooling, WebAssembly execution, and Unicode decoding. The first build downloads modules; document processing is offline thereafter.
 
-The built-in embedding implementation uses the standard library and a curated English synonym dictionary. It does not download or bundle trained model weights.
+Native embedding dependencies (pinned in `scripts/native-assets.json`):
+- `intfloat/multilingual-e5-small`, revision `ccc66d3`, MIT: INT8 ONNX weights and tokenizer. Replaces the curated English projection. About 118 MB of model weights, plus tokenizer/runtime. Tokenizer truncation/padding is disabled at build time; Chiedi supplies complete windows.
+- `microsoft/onnxruntime 1.23.2`, MIT with third-party notices: CPU inference through its versioned C API, loaded from the installed asset directory. The C API header is extracted into ignored build output; no additional Go module wrapper is needed.
+- `daulet/tokenizers 1.27.0`, Apache-2.0: native static tokenizer library and vendored C ABI declarations in `internal/embedding/tokenizers.h`. Uses Hugging Face tokenizers; preserves the pretrained tokenizer's vocabulary, normalization, and segmentation. Prebuilt static archives avoid a Rust compiler requirement.
+- Build-only Python 3 standard library: pinned asset download, checksum validation and packaging preparation. Python is not invoked by the installed application.
+
+Native archive SHA-256 values come from upstream release metadata. Setup records
+model/tokenizer/runtime checksums for load-time integrity checks. Bundles carry
+the native runtime's license/third-party notices and the model/tokenizer licenses.
+See [installation](docs/embedding.md).

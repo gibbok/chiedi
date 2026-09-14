@@ -102,3 +102,14 @@ also includes reconciliation. See [retrieval](retrieval.md) for ranking limitati
 Implementation: [benchmark runner](../benchmarks/search/main.go),
 [quality evaluator](../benchmarks/search/quality.go),
 [quality tests](../benchmarks/search/quality_test.go).
+
+## E5 measurements
+
+The production model is now multilingual E5-small INT8. Query-only and hybrid
+paths both use the query prefix; indexed passages use the passage prefix.
+The report includes model initialization plus first-query time separately from
+warm retrieval timings. Quality v3 adds ten Italian-to-English and ten
+Czech-to-English queries with topic judgments independent of model outputs.
+Existing English queries and judgments are retained (60 queries, three modes).
+Older projection results under `benchmarks/samples` are historical baselines;
+they do not describe E5 latency or relevance.

@@ -101,3 +101,16 @@ For a real MCP host smoke test:
 
 Implementation: [Makefile](../Makefile), [CI](../.github/workflows/verify.yml),
 [demo](../scripts/demo.sh), [E2E](../internal/e2e/e2e_test.go).
+
+## Native E5 coverage
+
+All embedding-dependent tests now exercise the real bundled multilingual E5 model.
+Make prepares pinned assets and sets `CHIEDI_ASSETS` for tests and their CLI/MCP
+subprocesses. For direct `go test`, run `make setup` first and export
+`CHIEDI_ASSETS="$PWD/bin/assets"`. No tests fetch model assets themselves.
+
+The native C build replaces the former pure-Go build check. CI runs both full
+verification targets on Linux x64 and macOS ARM, then benchmarks E5, packages
+the application, and tests installation/symlink asset discovery from another
+working directory. Package parallelism is limited to one for predictable native
+model/PDF memory use; race detection and all existing checks remain enabled.

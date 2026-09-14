@@ -69,7 +69,8 @@ def main():
         archive_path = download(config["url"], DEPS / "downloads" / config["url"].rsplit("/", 1)[1], config["sha256"])
         with tarfile.open(archive_path) as archive:
             if name == "ort":
-                copy_member(archive, "/include/onnxruntime_c_api.h", DEPS / "include/onnxruntime_c_api.h")
+                for header in ["onnxruntime_c_api.h", "onnxruntime_ep_c_api.h"]:
+                    copy_member(archive, "/include/" + header, DEPS / "include" / header)
                 suffix = "/lib/libonnxruntime." + LOCK["onnxruntime"] + ".dylib" if host_os == "darwin" else "/lib/libonnxruntime.so." + LOCK["onnxruntime"]
                 library = "libonnxruntime.dylib" if host_os == "darwin" else "libonnxruntime.so"
                 copy_member(archive, suffix, ASSETS / library)
@@ -79,7 +80,7 @@ def main():
                 copy_member(archive, "libtokenizers.a", DEPS / "lib/libtokenizers.a")
     base = "https://huggingface.co/" + LOCK["model"] + "/resolve/" + LOCK["revision"] + "/"
     # Immutable revision, never 'main' or a first-run runtime download.
-    model = download(base + "onnx/model_qint8_avx512_vnni.onnx", DEPS / "downloads/e5-ccc66d3-int8.onnx")
+    model = download(base + "onnx/model_qint8_avx512_vnni.onnx", DEPS / "downloads/e5-ccc66d3-int8.onnx", LOCK["model_sha256"])
     shutil.copy2(model, ASSETS / "model.onnx")
     tokenizer = download(base + "tokenizer.json", DEPS / "downloads/e5-ccc66d3-tokenizer.json")
     config = json.loads(tokenizer.read_text())
@@ -88,6 +89,8 @@ def main():
     config["truncation"] = None
     config["padding"] = None
     (ASSETS / "tokenizer.json").write_text(json.dumps(config, ensure_ascii=False, separators=(",", ":")))
+    if digest(ASSETS / "tokenizer.json") != LOCK["tokenizer_prepared_sha256"]:
+        raise RuntimeError("Prepared tokenizer checksum mismatch; remove the cached tokenizer and run setup again.")
     for filename, url in {
         "tokenizers-LICENSE": "https://raw.githubusercontent.com/daulet/tokenizers/v1.27.0/LICENSE",
         "e5-MIT-LICENSE": "https://raw.githubusercontent.com/microsoft/unilm/master/LICENSE",

@@ -82,6 +82,8 @@ func qualityQueries(n int) []qualityQuery {
 		"codebase storage migration", "utility water consumption", "worker wage agreement",
 		"planting irrigation tools", "furniture appliance cost",
 	}
+ italian := []string{"isolamento del tetto", "prenotazione albergo per le vacanze", "riparazione automobile", "pagamento della scuola", "visita medica", "migrazione del database", "bolletta del riscaldamento", "ferie e stipendio", "attrezzatura da giardino", "prezzo degli elettrodomestici"}
+ czech := []string{"izolace střechy", "rezervace hotelu na dovolenou", "oprava automobilu", "platba školného", "lékařské vyšetření", "migrace databáze", "účet za vytápění", "dovolená a mzda", "zahradní vybavení", "cena domácích spotřebičů"}
 	for topic, q := range queries {
 		var relevant []string
 		for i := 0; i < n; i++ {
@@ -91,6 +93,8 @@ func qualityQueries(n int) []qualityQuery {
 		}
 		out = append(out, qualityQuery{fmt.Sprintf("topic-%02d", topic), "topic", q, relevant})
 		out = append(out, qualityQuery{fmt.Sprintf("paraphrase-%02d", topic), "paraphrase", paraphrases[topic], relevant})
+		out = append(out, qualityQuery{fmt.Sprintf("italian-%02d", topic), "italian-to-english", italian[topic], relevant})
+		out = append(out, qualityQuery{fmt.Sprintf("czech-%02d", topic), "czech-to-english", czech[topic], relevant})
 	}
 	return out
 }
@@ -192,7 +196,7 @@ func qualitySearch(ctx context.Context, s *store.Store, q, mode string) ([]strin
 }
 
 func measureQuality(ctx context.Context, s *store.Store, folder string, n int) (string, error) {
-	fixture := qualityFixture{Version: "corpus-v1/quality-v2", Queries: qualityQueries(n)}
+	fixture := qualityFixture{Version: "corpus-v1/quality-v3", Queries: qualityQueries(n)}
 	byPath := map[string]string{}
 	for i := 0; i < n; i++ {
 		path := recordPath(i)
@@ -271,9 +275,9 @@ func validateFixture(f qualityFixture) error {
 
 func qualityMarkdown(results []qualityResult, hash string) string {
 	var b bytes.Buffer
-	fmt.Fprintf(&b, "\n#### Retrieval accuracy\n\nGround truth SHA-256: `%s`. Corpus v1 / quality v2.\n\nDocument-level macro averages; duplicate chunks retain their first rank. Recall@k = relevant documents in the first k unique results / all relevant documents. MRR = mean reciprocal rank of the first relevant document in the returned pool (zero on a miss). Each mode returns at most 40 chunks; hybrid still uses its production 40-candidate budget per retrieval path. MRR is bounded by that pool, not exhaustive corpus MRR. No refill after deduplication.\n\n| Mode | Category | Queries | Recall@1 | Recall@5 | Recall@10 | MRR (40-chunk pool) |\n|---|---|---:|---:|---:|---:|---:|\n", hash)
+	fmt.Fprintf(&b, "\n#### Retrieval accuracy\n\nGround truth SHA-256: `%s`. Corpus v1 / quality v3.\n\nDocument-level macro averages; duplicate chunks retain their first rank. Recall@k = relevant documents in the first k unique results / all relevant documents. MRR = mean reciprocal rank of the first relevant document in the returned pool (zero on a miss). Each mode returns at most 40 chunks; hybrid still uses its production 40-candidate budget per retrieval path. MRR is bounded by that pool, not exhaustive corpus MRR. No refill after deduplication.\n\n| Mode | Category | Queries | Recall@1 | Recall@5 | Recall@10 | MRR (40-chunk pool) |\n|---|---|---:|---:|---:|---:|---:|\n", hash)
 	for _, mode := range []string{"full-text", "vector", "hybrid"} {
-		for _, category := range []string{"all", "exact-reference", "topic", "paraphrase"} {
+		for _, category := range []string{"all", "exact-reference", "topic", "paraphrase", "italian-to-english", "czech-to-english"} {
 			var m qualityMetrics
 			count := 0
 			for _, r := range results {

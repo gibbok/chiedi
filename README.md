@@ -5,7 +5,7 @@
 `chiedi` makes local Markdown, text files, and PDFs searchable from your terminal
 and available to Codex or other AI Agent Harnesses through MCP, with source paths, headings, and PDF page references.
 
-Built in Go, with SQLite FTS5, exact vector search, and deterministic local embeddings.
+Built in Go, with SQLite FTS5, exact vector search, and bundled multilingual E5 embeddings.
 
 ## What can you use it for?
 
@@ -18,14 +18,18 @@ Built in Go, with SQLite FTS5, exact vector search, and deterministic local embe
 
 - **Local processing:** no model server, cloud account, or document upload is required by chiedi.
 - **Evidence you can inspect:** results contain the original passage and its source location.
-- **Search beyond identical wording:** keyword matching works alongside a built-in English synonym dictionary.
-- **A small setup:** one executable and a local index, with optional Tesseract for scanned PDFs.
+- **Search beyond identical wording:** keyword matching works alongside a trained multilingual embedding model.
+- **A small setup:** one installation containing the executable, model, tokenizer, and native runtime, with optional Tesseract for scanned PDFs.
 
 Chiedi retrieves evidence; the connected assistant decides how to use it. Its
-built-in embeddings are a lightweight lexical projection with curated synonyms,
-so retrieval quality depends on your documents and queries.
+embeddings use intfloat/multilingual-e5-small locally through ONNX Runtime's C API.
+Retrieval quality varies by language and document; no document leaves your computer.
 
 ## Get started
+
+Build and install with `make install` (Go, a C/C++ compiler, Python 3, Make, and Bash).
+The first build downloads pinned assets; installed processing is fully offline.
+See [native installation](docs/embedding.md) for platform requirements and bundles.
 
 Follow the [quick start](docs/getting-started.md) to build, index a folder, and run
 your first search. Then [connect an MCP client](docs/mcp.md).

@@ -45,5 +45,7 @@
         "sha256": "fb84b8b2e349a5952767ffe80ccd862fc44084de47f3b0cc3f0b7c9d4e649cf7"
       }
     }
-  }
+  },
+  "model_sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88",
+  "tokenizer_prepared_sha256": "24845927c35eb41a075cf0a3fb8a7a0f81e7a8518c9e01dafdf7c90deac679c3"
 }
