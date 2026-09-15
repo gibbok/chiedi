@@ -27,7 +27,7 @@ Retrieval quality varies by language and document; no document leaves your compu
 
 ## Get started
 
-Build and install with `make install` (Go, a C/C++ compiler, Python 3, Make, and Bash).
+Build and install with `make install` (Go, a C/C++ compiler, Make, and Bash).
 The first build downloads pinned assets; installed processing is fully offline.
 See [native installation](docs/embedding.md) for platform requirements and bundles.
 
