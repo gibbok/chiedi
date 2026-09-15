@@ -93,7 +93,7 @@ Tests use the actual bundled model and never download from inside test code.
 Embedding coverage includes cross-language queries, relevance against distractors,
 normalized finite output, full token-window coverage, long tails, concurrency,
 cancellation and corrupt assets. Tests also compare native vectors against a
-checked-in independent tokenizer/ONNX mean-pooling reference for five multilingual
+separate Go/C tokenizer/ONNX mean-pooling reference for five multilingual
 query/passage inputs. No Python is required to run setup or tests.
 Benchmarks use the production E5 paths, report
 cold initialization separately, and measure English, Italian-to-English and

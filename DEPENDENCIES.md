@@ -18,4 +18,4 @@ model/tokenizer/runtime checksums for load-time integrity checks. Bundles carry
 the native runtime's license/third-party notices and the model/tokenizer licenses.
 See [installation](docs/embedding.md).
 
-The checked-in numerical reference fixture was generated independently with NumPy 2.2.6, ONNX Runtime 1.23.2 and Hugging Face tokenizers 0.22.2. Running the tests requires only Go and the native assets; no Python installation is needed. See `internal/embedding/testdata/README.md` for provenance.
+The test-only numerical reference uses the same pinned native libraries through a separate Go/C implementation: upstream special-token encoding, raw ONNX output, and float64 mean pooling with L2 normalization. It adds no dependency and is not linked into the installed application. Setup and tests do not require Python.

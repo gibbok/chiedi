@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/gibbok/chiedi/internal/embedding/reference"
 )
 
 func TestE5MultilingualQueries(t *testing.T) {
@@ -172,24 +174,16 @@ func BenchmarkE5Query(b *testing.B) {
 }
 
 func TestE5MatchesIndependentReference(t *testing.T) {
-	path := os.Getenv("CHIEDI_E5_REFERENCE")
-	if path == "" {
-		path = "testdata/e5-reference.json"
-	}
-	raw, err := os.ReadFile(path)
+	dir, err := assetDirectory()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var cases []struct {
-		Kind   string
-		Text   string
-		Vector []float32
-	}
-	if err = json.Unmarshal(raw, &cases); err != nil {
-		t.Fatal(err)
-	}
-	if len(cases) < 5 {
-		t.Fatal("incomplete independent reference")
+	cases := []struct{ Kind, Text string }{
+		{"query", "How many vacation days do workers get?"},
+		{"query", "Kolik dní dovolené mají zaměstnanci?"},
+		{"query", "数据库备份保留多久？"},
+		{"passage", "Employees receive twenty days of paid vacation each year."},
+		{"passage", "La visita dal dentista è fissata per martedì mattina."},
 	}
 	for _, tc := range cases {
 		var got [][]float32
@@ -201,10 +195,14 @@ func TestE5MatchesIndependentReference(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(tc.Vector) != dimensions {
+		wantVector, err := reference.Vector(dir, tc.Kind+": "+tc.Text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(wantVector) != dimensions {
 			t.Fatal("invalid reference dimensions")
 		}
-		for i, want := range tc.Vector {
+		for i, want := range wantVector {
 			if math.Abs(float64(got[0][i]-want)) > 2e-4 {
 				t.Fatalf("%s coordinate %d: got %g want %g", tc.Text, i, got[0][i], want)
 			}
