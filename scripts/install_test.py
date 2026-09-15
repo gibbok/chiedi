@@ -18,7 +18,11 @@ class InstallTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.source = self.root / "source"
         (self.source / "assets").mkdir(parents=True)
-        shutil.copy(shutil.which("sleep"), self.source / "chiedi")
+        # Do not copy a system-signed macOS binary: the OS can kill the copy
+        # when its embedded signature no longer matches the file location.
+        binary = self.source / "chiedi"
+        binary.write_text("#!/bin/sh\nsleep \"${1:-0}\"\n")
+        binary.chmod(0o755)
         (self.source / "assets/manifest.json").write_text('{"version": 1}')
         self.prefix = self.root / "installed"
 

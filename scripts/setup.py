@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 import platform
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,6 +25,41 @@ def digest(path):
             h.update(block)
     return h.hexdigest()
 
+def _certificate_error(error):
+    reason = getattr(error, "reason", error)
+    return (
+        isinstance(reason, (ssl.CertificateError, ssl.SSLCertVerificationError))
+        or "CERTIFICATE_VERIFY_FAILED" in str(reason)
+    )
+
+def _download_with_curl(url, target):
+    curl = shutil.which("curl")
+    if not curl:
+        return False
+    subprocess.run(
+        [
+            curl,
+            "--fail",
+            "--location",
+            "--retry",
+            "2",
+            "--retry-delay",
+            "1",
+            "--connect-timeout",
+            "20",
+            "--max-time",
+            "180",
+            "--silent",
+            "--show-error",
+            "--output",
+            str(target),
+            "--",
+            url,
+        ],
+        check=True,
+    )
+    return True
+
 def download(url, target, expected=None):
     if target.exists() and (expected is None or digest(target) == expected):
         return target
@@ -31,8 +68,20 @@ def download(url, target, expected=None):
     for attempt in range(3):
         try:
             request = urllib.request.Request(url, headers={"User-Agent": "chiedi-build"})
-            with urllib.request.urlopen(request, timeout=180) as response, temp.open("wb") as output:
-                shutil.copyfileobj(response, output)
+            try:
+                with urllib.request.urlopen(request, timeout=180) as response, temp.open("wb") as output:
+                    shutil.copyfileobj(response, output)
+            except (urllib.error.URLError, ssl.SSLError) as error:
+                # Some Python installations do not know the host OS certificate
+                # store (notably Homebrew/embedded Python on macOS). Use curl's
+                # native trust store in that case; never disable TLS verification.
+                if not _certificate_error(error):
+                    raise
+                if not _download_with_curl(url, temp):
+                    raise RuntimeError(
+                        "Python cannot verify HTTPS certificates and curl is not installed; "
+                        "install curl or configure Python's CA store."
+                    ) from error
             if expected and digest(temp) != expected:
                 raise RuntimeError("Checksum mismatch: " + url)
             temp.replace(target)

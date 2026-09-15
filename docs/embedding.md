@@ -14,6 +14,9 @@ cross compilation and `CGO_ENABLED=0` builds are not configured.
 Source builds require Go 1.25+, a C/C++ compiler, Python 3, GNU Make and Bash.
 On macOS install the Xcode Command Line Tools; on Debian/Ubuntu install
 `build-essential python3 make` alongside Go.
+`curl` is recommended when Python does not have access to the operating system
+certificate store; setup uses it as a secure HTTPS fallback and still verifies
+every pinned checksum.
 
 ```sh
 make install

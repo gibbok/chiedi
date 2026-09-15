@@ -74,6 +74,7 @@ test-e2e: setup ## Run the real compiled binary through the acceptance scenario
 
 test-install: ## Check installation upgrades and path handling
 	python3 scripts/install_test.py
+	python3 scripts/setup_test.py
 
 .PHONY: test-install
 
