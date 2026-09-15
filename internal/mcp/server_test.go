@@ -58,12 +58,12 @@ func TestStatusRejectsCorruptReconciliationMetadata(t *testing.T){
 }
 
 func TestListDocumentsReturnsAnEmptyArray(t *testing.T){
-	ctx:=context.Background();s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"empty.db"));if err!=nil{t.Fatal(err)};defer s.Close();embedder:=embedding.Projection{};server:=Server{Store:s,Indexer:indexer.Indexer{Store:s,Embedder:embedder},Retriever:retrieval.Retriever{Store:s,Embedder:embedder}};value,err:=server.call(ctx,"list_documents",json.RawMessage(`{}`));if err!=nil{t.Fatal(err)};encoded,err:=json.Marshal(value);if err!=nil{t.Fatal(err)};if string(encoded)!="[]"{t.Fatalf("empty documents encoded as %s",encoded)}
+	ctx:=context.Background();s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"empty.db"));if err!=nil{t.Fatal(err)};defer s.Close();embedder:=embedding.E5{};server:=Server{Store:s,Indexer:indexer.Indexer{Store:s,Embedder:embedder},Retriever:retrieval.Retriever{Store:s,Embedder:embedder}};value,err:=server.call(ctx,"list_documents",json.RawMessage(`{}`));if err!=nil{t.Fatal(err)};encoded,err:=json.Marshal(value);if err!=nil{t.Fatal(err)};if string(encoded)!="[]"{t.Fatalf("empty documents encoded as %s",encoded)}
 }
 
 func TestToolResultsConformToMCPObjectContract(t *testing.T){
  ctx:=context.Background();s,err:=store.Open(ctx,filepath.Join(t.TempDir(),"contract.db"));if err!=nil{t.Fatal(err)};defer s.Close()
- embedder:=embedding.Projection{};server:=Server{Store:s,Indexer:indexer.Indexer{Store:s,Embedder:embedder},Retriever:retrieval.Retriever{Store:s,Embedder:embedder}}
+ embedder:=embedding.E5{};server:=Server{Store:s,Indexer:indexer.Indexer{Store:s,Embedder:embedder},Retriever:retrieval.Retriever{Store:s,Embedder:embedder}}
  root:=t.TempDir();path:=filepath.Join(root,"evidence.txt");if err:=os.WriteFile(path,[]byte("known document evidence"),0600);err!=nil{t.Fatal(err)};if err:=s.AddRoot(ctx,root);err!=nil{t.Fatal(err)}
  if _,err:=server.Indexer.Reconcile(ctx);err!=nil{t.Fatal(err)};chunks,err:=s.AllChunks(ctx,"");if err!=nil||len(chunks)!=1{t.Fatalf("chunks: %+v %v",chunks,err)}
  for _,call:=range []struct{name string;args any}{{"retrieve",map[string]any{"question":"known evidence"}},{"read_chunks",map[string]any{"chunk_ids":[]int64{chunks[0].ID}}},{"list_documents",map[string]any{}},{"index_status",map[string]any{}}}{

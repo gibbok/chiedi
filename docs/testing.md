@@ -8,8 +8,8 @@ change. Tests exercise local extraction, storage, retrieval, CLI, and MCP behavi
 ## Setup and contribution workflow
 
 - Go 1.25+, GNU Make, and Bash; initial module downloads may need network access.
-- The production binary supports `CGO_ENABLED=0`. The Go race detector requires
-  CGo and a supported C compiler/toolchain.
+- Production embeddings require cgo and a C/C++ compiler. Python 3 prepares build
+  assets; see [native installation](embedding.md).
 - Install Tesseract with English data for real OCR acceptance tests.
 - Follow [AGENTS.md](../AGENTS.md): preserve local processing, provenance, atomic
   document storage, and embedding reuse; add tests for behavior changes.
@@ -28,13 +28,14 @@ CHIEDI_TEST_OCR=1 make verify-full
 
 Both are aliases for `test-all` and execute the same full sequence. CI runs both
 with OCR required, checks that `go mod tidy` leaves dependency files unchanged,
-and checks a standalone `CGO_ENABLED=0` build. Without `CHIEDI_TEST_OCR=1`, real
+and checks a relocated native installation. Without `CHIEDI_TEST_OCR=1`, real
 OCR acceptance coverage is skipped; other PDF regressions still run.
 
 ## Verification targets
 
 | Target | Purpose |
 | --- | --- |
+| `make test-install` | Check relative/shared prefixes, running-process upgrades and failed-copy recovery without downloading models |
 | `make deps` | Verify cached modules against checksums |
 | `make test-unit` / `make test` | Run `go test ./...`, including compiled-binary tests; real OCR remains opt-in |
 | `make test-race` / `make race` | Run all default tests under the race detector |
@@ -54,11 +55,13 @@ The common binary scenario already runs under ordinary `go test ./...` unless
 
 ## What the tests cover
 
+- **Installation:** relative paths with spaces, published release permissions, upgrades
+  while current or legacy executables run, and preservation after failed asset copies.
 - **Indexing:** unchanged files, single-chunk edits, rename reuse, deletion,
   metadata-only changes, unavailable roots, incomplete scans, and symlink containment.
 - **Storage:** rollback, concurrent writers, schema migration, vector dimensions
   and non-finite values, FTS/vector consistency, and non-reused chunk IDs.
-- **Retrieval:** literal path filters, snapshot consistency, curated synonym and
+- **Retrieval:** literal path filters, snapshot consistency, synonym and
   identifier regressions, and separate document-level questions.
 - **MCP:** framing, strict arguments, tool schemas/results, bounded neighbors,
   failure locations, and stale references.
@@ -67,7 +70,7 @@ The common binary scenario already runs under ordinary `go test ./...` unless
 - **Acceptance:** build a real executable and drive indexing, search, all MCP
   tools, concurrent processes, incremental changes, restart, and `doctor`.
 
-The 50-case synonym/identifier suite checks 40 known dictionary mappings and 10
+The 50-case synonym/identifier suite checks 40 legacy synonym relationships using explanatory passages and disambiguating query context and 10
 identifiers, requiring the expected source to rank first. It is a regression gate,
 not evidence of general semantic understanding. See [benchmarks](benchmarks.md)
 for document-level accuracy measurements.
@@ -101,3 +104,16 @@ For a real MCP host smoke test:
 
 Implementation: [Makefile](../Makefile), [CI](../.github/workflows/verify.yml),
 [demo](../scripts/demo.sh), [E2E](../internal/e2e/e2e_test.go).
+
+## Native E5 coverage
+
+All embedding-dependent tests now exercise the real bundled multilingual E5 model.
+Make prepares pinned assets and sets `CHIEDI_ASSETS` for tests and their CLI/MCP
+subprocesses. For direct `go test`, run `make setup` first and export
+`CHIEDI_ASSETS="$PWD/bin/assets"`. No tests fetch model assets themselves.
+
+The native C build replaces the former pure-Go build check. CI runs both full
+verification targets on Linux x64 and macOS ARM, then benchmarks E5, packages
+the application, and tests installation/symlink asset discovery from another
+working directory. Package parallelism is limited to one for predictable native
+model/PDF memory use; race detection and all existing checks remain enabled.

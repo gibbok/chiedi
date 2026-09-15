@@ -9,7 +9,7 @@ and operational details.
 | [Getting started and CLI](getting-started.md) | Build, select a database, manage roots, search, and configure the process |
 | [Architecture](architecture.md) | Runtime boundaries, package responsibilities, and extension points |
 | [Indexing and chunking](indexing.md) | Change detection, extraction, provenance, and embedding reuse |
-| [Retrieval algorithms](retrieval.md) | Feature hashing, BM25 candidates, cosine search, and reciprocal rank fusion |
+| [Retrieval algorithms](retrieval.md) | Multilingual E5 embeddings, BM25 candidates, cosine search, and reciprocal rank fusion |
 | [PDF conversion](pdf-conversion.md) | Text extraction, scanned pages, OCR settings, and limits |
 | [MCP integration](mcp.md) | Transport, tool contracts, result shapes, and stale references |
 | [Storage and operations](storage.md) | Schema, transactions, failure diagnosis, privacy, and rebuilding |
@@ -23,7 +23,8 @@ and operational details.
 - Retrieval: ranked chunks, with root/path and heading or page provenance where available.
 - Refresh: on-demand reconciliation before CLI search and every supported MCP tool; no background watcher.
 - Scale: exact vector scanning and filesystem walks; use the benchmark on representative documents.
-- Semantic coverage: curated English synonym mappings and simple stemming, without a trained language model.
+- Semantic coverage: bundled multilingual E5-small INT8, with quality dependent on language and domain.
+- Installation: [native model/runtime bundle](embedding.md), with no runtime downloads.
 
 Each guide links to its implementation sources. Defaults and limits describe the
 current code; proposed extensions are identified explicitly.

@@ -24,3 +24,12 @@ go.work.sum
 
 # Generated performance corpora, SQLite indexes, logs and machine-specific reports
 /benchmarks/output/
+
+# Native build downloads, model assets, and release bundles
+.deps/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+

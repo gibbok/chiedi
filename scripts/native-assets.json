@@ -1,0 +1,51 @@
+{
+  "onnxruntime": "1.23.2",
+  "tokenizers": "1.27.0",
+  "model": "intfloat/multilingual-e5-small",
+  "revision": "ccc66d3",
+  "model_id": "intfloat/multilingual-e5-small-ccc66d3-int8-window-v1",
+  "platforms": {
+    "linux-amd64": {
+      "ort": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-x64-1.23.2.tgz",
+        "sha256": "1fa4dcaef22f6f7d5cd81b28c2800414350c10116f5fdd46a2160082551c5f9b"
+      },
+      "tokenizer": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-amd64.tar.gz",
+        "sha256": "72556cdca798dd4ea7cdaba308e5f0d68a8cb93b67c96edf485b7a0edd7b07f4"
+      }
+    },
+    "linux-arm64": {
+      "ort": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-linux-aarch64-1.23.2.tgz",
+        "sha256": "7c63c73560ed76b1fac6cff8204ffe34fe180e70d6582b5332ec094810241e5c"
+      },
+      "tokenizer": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.linux-arm64.tar.gz",
+        "sha256": "e96545ad05930c26f51f63d932ee6d3bbd32bbed149e102c5290d587a2293067"
+      }
+    },
+    "darwin-amd64": {
+      "ort": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-osx-x86_64-1.23.2.tgz",
+        "sha256": "d10359e16347b57d9959f7e80a225a5b4a66ed7d7e007274a15cae86836485a6"
+      },
+      "tokenizer": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-x86_64.tar.gz",
+        "sha256": "6239efe5a81fde8089ef2df8ae710366542b4e5deab6d8ecb74d7d1862db2ddb"
+      }
+    },
+    "darwin-arm64": {
+      "ort": {
+        "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.23.2/onnxruntime-osx-arm64-1.23.2.tgz",
+        "sha256": "b4d513ab2b26f088c66891dbbc1408166708773d7cc4163de7bdca0e9bbb7856"
+      },
+      "tokenizer": {
+        "url": "https://github.com/daulet/tokenizers/releases/download/v1.27.0/libtokenizers.darwin-arm64.tar.gz",
+        "sha256": "fb84b8b2e349a5952767ffe80ccd862fc44084de47f3b0cc3f0b7c9d4e649cf7"
+      }
+    }
+  },
+  "model_sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88",
+  "tokenizer_prepared_sha256": "24845927c35eb41a075cf0a3fb8a7a0f81e7a8518c9e01dafdf7c90deac679c3"
+}

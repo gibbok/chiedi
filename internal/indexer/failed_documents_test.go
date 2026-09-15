@@ -67,7 +67,7 @@ func TestFailedDocumentsExposeAbsolutePaths(t *testing.T) {
 
 			stats, err := (Indexer{
 				Store:    database,
-				Embedder: embedding.Projection{},
+				Embedder: embedding.E5{},
 			}).Reconcile(ctx)
 			if err != nil {
 				t.Fatal(err)
@@ -97,7 +97,7 @@ func TestFailedDocumentsExposeAbsolutePaths(t *testing.T) {
 			if persisted.Failed != stats.Failed || !reflect.DeepEqual(persisted.FailedDocumentPaths, stats.FailedDocumentPaths) {
 				t.Fatalf("persisted failures disagree: %+v vs %+v", persisted, stats)
 			}
-			unchanged, err := (Indexer{Store: database, Embedder: embedding.Projection{}}).Reconcile(ctx)
+			unchanged, err := (Indexer{Store: database, Embedder: embedding.E5{}}).Reconcile(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -9,8 +9,11 @@ builds its own index without changing your source documents.
 
 - Requires Go 1.25 or newer. The first build may download Go modules.
 - GNU Make and Bash are used by the developer commands and demo.
-- The application builds without CGo; scanned PDFs additionally need local
-  Tesseract and language data. See [PDF conversion](pdf-conversion.md).
+- Native embeddings require a C/C++ compiler and Python 3 at build time. Run
+  `make install` for a complete installation under `~/.local`, or `make build`
+  for a local bundle. See [native installation](embedding.md).
+- Scanned PDFs additionally need local Tesseract and language data.
+  See [PDF conversion](pdf-conversion.md).
 
 Run from the repository root:
 
@@ -61,6 +64,7 @@ is optional before subsequent searches.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `CHIEDI_ASSETS` | `assets/` beside the resolved executable | Optional explicit model/runtime directory; normally unnecessary |
 | `CHIEDI_DB` | `chiedi.db` | SQLite index location |
 | `CHIEDI_PDF_OCR` | `auto` | PDF OCR mode: `auto`, `always`, or `off` |
 | `CHIEDI_OCR_LANG` | `eng` | Installed Tesseract languages, optionally joined with `+` |

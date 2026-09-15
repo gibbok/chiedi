@@ -51,12 +51,14 @@ predates accuracy reporting. New results remain ignored unless deliberately sele
 
 ## Accuracy algorithm
 
-A separate untimed pass evaluates the same index with **40 queries**:
+A separate untimed pass evaluates the same index with **60 queries**:
 
 - **20 exact-reference queries:** one TXT/PDF pair per topic, sampled across the
   corpus; each has one relevant document.
 - **10 topic queries:** all documents assigned to that topic are relevant.
 - **10 fixed paraphrases:** use the same topic judgments with alternative wording.
+- **10 Italian-to-English queries:** use the same topic judgments.
+- **10 Czech-to-English queries:** use the same topic judgments.
 
 Judgments come from the corpus specification, not retrieved scores. Stable
 `record-00000` identifiers avoid depending on SQLite IDs. Ground truth records
@@ -75,8 +77,8 @@ paths and each file's SHA-256; its own hash is included in the report.
 | Reciprocal rank | `1 / rank` of the first relevant unique document, or 0 if absent |
 | MRR | Mean reciprocal rank over the evaluated queries within the returned pool |
 
-Overall averages weight queries equally: 20 exact, 10 topic, 10 paraphrase, so
-categories do not have equal weight. If a topic has 100 relevant documents,
+Overall averages weight queries equally: 20 exact, 10 topic, 10 paraphrase,
+10 Italian-to-English and 10 Czech-to-English, so categories do not have equal weight. If a topic has 100 relevant documents,
 Recall@10 cannot exceed 0.10. MRR is limited to the returned 40-chunk pool,
 not exhaustive corpus MRR. Missing hits score zero; invalid judgments or retrieval
 errors abort the run. Quality scores have no arbitrary pass/fail threshold.
@@ -92,7 +94,8 @@ errors abort the run. Quality scores have no arbitrary pass/fail threshold.
   sampling, and macro averages:
 
 ```sh
-go test -tags benchmark -count=1 ./benchmarks/search
+make setup
+CHIEDI_ASSETS="$PWD/bin/assets" go test -p 1 -tags benchmark -count=1 ./benchmarks/search
 ```
 
 Synthetic short English documents do not establish quality or latency for scans,
@@ -102,3 +105,14 @@ also includes reconciliation. See [retrieval](retrieval.md) for ranking limitati
 Implementation: [benchmark runner](../benchmarks/search/main.go),
 [quality evaluator](../benchmarks/search/quality.go),
 [quality tests](../benchmarks/search/quality_test.go).
+
+## E5 measurements
+
+The production model is now multilingual E5-small INT8. Query-only and hybrid
+paths both use the query prefix; indexed passages use the passage prefix.
+The report includes model initialization plus first-query time separately from
+warm retrieval timings. Quality v3 adds ten Italian-to-English and ten
+Czech-to-English queries with topic judgments independent of model outputs.
+Existing English queries and judgments are retained (60 queries, three modes).
+Older projection results under `benchmarks/samples` are historical baselines;
+they do not describe E5 latency or relevance.

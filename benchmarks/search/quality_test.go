@@ -71,7 +71,7 @@ func TestQualityFixture(t *testing.T) {
 		if err := validateFixture(f); err != nil {
 			t.Fatal(n, err)
 		}
-		if len(f.Queries) != 40 || !reflect.DeepEqual(f.Queries, qualityQueries(n)) {
+		if len(f.Queries) != 60 || !reflect.DeepEqual(f.Queries, qualityQueries(n)) {
 			t.Fatal("unstable query suite")
 		}
 		seen := map[string]bool{}
@@ -151,7 +151,7 @@ func TestQualityReproducible(t *testing.T) {
 		if err := json.Unmarshal(current[1], &results); err != nil {
 			t.Fatal(err)
 		}
-		if len(results) != 120 {
+		if len(results) != 180 {
 			t.Fatalf("got %d rows", len(results))
 		}
 		for _, r := range results {

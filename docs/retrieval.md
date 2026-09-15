@@ -1,7 +1,7 @@
 # Retrieval algorithms
 
 Hybrid retrieval combines two useful signals: words that match the question and
-passages with similar projected features. It returns ranked source chunks, not a
+passages with similar learned embeddings. It returns ranked source chunks, not a
 generated answer or a calibrated confidence score.
 
 [Documentation index](README.md)
@@ -10,7 +10,7 @@ generated answer or a calibrated confidence score.
 
 ```mermaid
 flowchart TD
-    Query["Prepared question"] --> Embed["Local projection"]
+    Query["Prepared question"] --> Embed["Local E5 inference"]
     Query --> FTS["FTS5 / BM25"]
     Embed --> Vector["Exact cosine search"]
     FTS --> Fusion["Reciprocal rank fusion"]
@@ -20,42 +20,39 @@ flowchart TD
 
 - CLI search and MCP tools reconcile roots first. `Retriever.Retrieve` itself
   does not scan files; internal callers control refresh explicitly.
-- Lowercase and tokenize the question into Unicode letter/number sequences,
-  remove a fixed English stopword list, and fall back to the original question
-  if no terms remain. Stored document embeddings do not use this query filter.
+- Trim surrounding query whitespace and embed the original question. Lexical
+  search independently lowercases and tokenizes the query into Unicode words.
 - Read up to **40 vector candidates** and **40 lexical candidates** from one SQLite
   read snapshot. Their union can contain up to 80 chunks.
 - Fuse ranks and return the requested number of chunks: default 10, maximum 50.
   Several chunks can come from one document; production retrieval does not deduplicate documents.
 
-## Deterministic embedding projection
+## Multilingual E5 embeddings
 
-The built-in model is `builtin-semantic-projection-en-v2`, with **384 float32
-coordinates**. It uses signed feature hashing; no learned weights are involved.
+The production model is `intfloat/multilingual-e5-small`, pinned to revision
+`ccc66d3` with INT8 weights and 384 float32 output coordinates. Inference runs
+locally through ONNX Runtime's C API and the bundled native tokenizer.
 
-1. Lowercase and split on characters that are neither Unicode letters nor numbers.
-2. For each token, add a `word:<token>` feature with weight **1**.
-3. Canonicalize through the curated synonym dictionary first (for example,
-   `configure` → `setup`). Otherwise strip the first matching suffix from
-   `ingly`, `edly`, `ing`, `ed`, `es`, `s`, provided more than three bytes remain.
-4. Add a canonical concept feature with weight **1.7**. Recognized dictionary
-   entries or changed stems use five namespaces (`concept`, `meaning`, `topic`,
-   `intent`, `semantic`); ordinary unchanged words use only `concept`.
-5. Add the adjacent canonical-token pair feature with weight **0.35**.
-6. Hash every feature with FNV-1a 64-bit: coordinate = hash modulo 384; the high bit
-   chooses the sign. Sum contributions, then L2-normalize a nonzero vector.
+Questions retain their original wording and receive `query: `; document chunks
+receive `passage: `. Each window has at most 512 tokens including prefix and
+special tokens. Mean pooling includes every unpadded token; vectors are
+L2-normalized. Longer text is covered by contiguous windows and their normalized
+vectors are averaged with content-token-count weights, then normalized again.
+No source text is truncated or rewritten. See [embedding and installation](embedding.md).
 
-The five concept projections reduce the chance that one signed collision cancels
-an important synonym signal. Hash collisions still occur; stemming is heuristic,
-and the dictionary covers only selected English relationships. This does not
-provide general semantic or multilingual understanding. Punctuation-only input
-can produce a zero vector, for which vector SQL is skipped.
+There is no curated synonym dictionary, suffix stripping or English stopword
+filter. Empty/whitespace input gives a zero vector. Learned similarity depends
+on language, context and domain; it is not a calibrated confidence score.
 
 ## Lexical ranking
 
 FTS5 provides exact-term matching over chunk text, heading, and relative path.
 
-- Build quoted, distinct query terms of at least two runes, joined with `OR`.
+- Build quoted, distinct query terms of at least two runes, joined with `AND`.
+- Require all query terms for the lexical channel. This prevents a few shared
+  grammatical words from boosting an unrelated passage above a cross-language
+  semantic match. Natural-language questions can rely on E5 when the complete
+  wording is absent; exact identifiers and keyword conjunctions retain FTS support.
 - If none remain, use a sentinel term (`__no_match__`).
 - Order matches by SQLite `bm25(chunks_fts)` ascending, with default column weights.
 - User input is converted into terms; it is not passed through as an advanced FTS
@@ -102,6 +99,6 @@ answering step. Evaluate known questions with [retrieval accuracy metrics](bench
 and inspect their sources before treating a match as useful evidence.
 
 Implementation: [query preparation and fusion](../internal/retrieval/retrieval.go),
-[projection](../internal/embedding/embedding.go),
+[E5 embedding](../internal/embedding/embedding.go),
 [vector candidates and snapshots](../internal/store/vectors.go),
 [FTS query](../internal/store/store.go).

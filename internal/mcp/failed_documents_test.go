@@ -21,7 +21,7 @@ func TestStatusKeepsCurrentFailedPathsAcrossReconciliation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer database.Close()
-	server := Server{Store: database, Indexer: indexer.Indexer{Store: database, Embedder: embedding.Projection{}}}
+	server := Server{Store: database, Indexer: indexer.Indexer{Store: database, Embedder: embedding.E5{}}}
 
 	check := func(want []string, reconcile bool) {
 		t.Helper()

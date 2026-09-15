@@ -85,10 +85,16 @@ func run(ctx context.Context, sizes []int, repeats int) error {
 	if err != nil {
 		return err
 	}
+	coldStart := time.Now()
+	if _, err := (embedding.E5{}).EmbedQuery(ctx, []string{"Find the invoice"}); err != nil {
+		return err
+	}
+	coldSeconds := time.Since(coldStart).Seconds()
 	report := new(bytes.Buffer)
 	fmt.Fprintln(report, "# Personal search benchmark\n\nStatus: COMPLETE (all indexing, integrity and query checks passed).")
 	fmt.Fprintf(report, "\nUTC: %s\n\n## Environment\n\n```text\n%s\n```\n", time.Now().UTC().Format(time.RFC3339), hardware())
-	fmt.Fprintf(report, "\n## Method\n\nCorpus v1: deterministic synthetic English family/project records, half text PDFs and half plain text (PDF count rounded down). Each document has 3–7 sections with unique record IDs, dates and amounts. No scans or OCR. Sizes: %v. Model: %s, %d dimensions.\n\nSingle client, persistent SQLite connection, sequential queries, no concurrent indexing. Each query/mode has 3 untimed warmups then %d samples; modes rotate each repetition. Percentiles use nearest rank. All samples are warm-cache, not cold disk measurements.\n\nVector-only uses Candidates with an empty FTS query; full-text-only uses Candidates with a zero vector (skips vector SQL). Both fetch source text and return up to 40 candidates. Query embedding is prepared outside these two timings. Hybrid uses the normal Retriever with limit 10 and includes query embedding and rank fusion. Timings exclude process startup, file reconciliation, indexing and output formatting. These are retrieval timings, not CLI end-to-end timings. Latency checks returned counts; a separate untimed pass measures document relevance against deterministic ground truth.\n", sizes, embedding.Projection{}.ID(), embedding.Projection{}.Dimensions(), repeats)
+	fmt.Fprintf(report, "\n## Method\n\nCorpus v1: deterministic synthetic English family/project records, half text PDFs and half plain text (PDF count rounded down). Each document has 3–7 sections with unique record IDs, dates and amounts. No scans or OCR. Sizes: %v. Model: %s, %d dimensions.\n\nSingle client, persistent SQLite connection, sequential queries, no concurrent indexing. Each query/mode has 3 untimed warmups then %d samples; modes rotate each repetition. Percentiles use nearest rank. All samples are warm-cache, not cold disk measurements.\n\nVector-only uses Candidates with an empty FTS query; full-text-only uses Candidates with a zero vector (skips vector SQL). Both fetch source text and return up to 40 candidates. Query embedding is prepared outside these two timings. Hybrid uses the normal Retriever with limit 10 and includes query embedding and rank fusion. Timings exclude process startup, file reconciliation, indexing and output formatting. These are retrieval timings, not CLI end-to-end timings. Latency checks returned counts; a separate untimed pass measures document relevance against deterministic ground truth.\n", sizes, embedding.E5{}.ID(), embedding.E5{}.Dimensions(), repeats)
+	fmt.Fprintf(report, "\nModel initialization plus first query: %.3f seconds (includes asset checksums). Subsequent query samples reuse the process-owned session.\n", coldSeconds)
 	fmt.Fprintln(report, "\n## Results\n\n| Documents | PDFs | Chunks | Index seconds |\n|---:|---:|---:|---:|")
 	var details bytes.Buffer
 	for _, n := range sizes {
@@ -137,7 +143,7 @@ func scenario(ctx context.Context, dir string, n, repeats int) (string, string, 
 	if err = s.AddRoot(ctx, corpus); err != nil {
 		return "", "", err
 	}
-	e := embedding.Projection{}
+	e := embedding.E5{}
 	idx := indexer.Indexer{Store: s, Embedder: e}
 	start := time.Now()
 	stats, err := idx.Reconcile(ctx)
@@ -165,11 +171,11 @@ func scenario(ctx context.Context, dir string, n, repeats int) (string, string, 
 	var rows bytes.Buffer
 	fmt.Fprintf(&rows, "\n### %d documents\n\n| Query | Mode | Samples | Min ms | Median ms | p95 ms | Max ms | Mean ms | Results min–max |\n|---|---|---:|---:|---:|---:|---:|---:|---:|\n", n)
 	for _, q := range queries {
-		v, err := e.Embed(ctx, []string{q})
+		v, err := e.EmbedQuery(ctx, []string{q})
 		if err != nil {
 			return "", "", err
 		}
-		fts := `"` + strings.Join(strings.Fields(q), `" OR "`) + `"`
+		fts := `"` + strings.Join(strings.Fields(q), `" AND "`) + `"`
 		zero := make([]float32, e.Dimensions())
 		// Assert that each database mode really excludes the other ranking path.
 		for _, check := range []struct {

@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestProjectionSemanticSimilarity(t *testing.T) {
-	e := Projection{}
+func TestE5SemanticSimilarity(t *testing.T) {
+	e := E5{}
 	vs, err := e.Embed(context.Background(), []string{
 		"How many vacation days do workers get?",
 		"Employees are entitled to twenty business days of paid annual leave each year.",
@@ -26,7 +26,7 @@ func TestProjectionSemanticSimilarity(t *testing.T) {
 	}
 }
 
-func TestProjectionConceptFeaturesResistSignedHashCollisions(t *testing.T) {
+func TestE5SynonymsOutrankDistractors(t *testing.T) {
 	tests := []struct {
 		name       string
 		question   string
@@ -38,7 +38,7 @@ func TestProjectionConceptFeaturesResistSignedHashCollisions(t *testing.T) {
 		{name: "display", question: "What does display mean here?", relevant: "show", distractor: "fix"},
 	}
 
-	embedder := Projection{}
+	embedder := E5{}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			vectors, err := embedder.Embed(context.Background(), []string{
@@ -65,18 +65,29 @@ func TestProjectionConceptFeaturesResistSignedHashCollisions(t *testing.T) {
 	}
 }
 
-func TestCosineRejectsNonFiniteValues(t *testing.T){
-	for _,value:=range []float32{float32(math.NaN()),float32(math.Inf(1)),float32(math.Inf(-1))}{if _,err:=Cosine([]float32{value,1},[]float32{1,1});err==nil{t.Fatalf("accepted non-finite value %v",value)}}
+func TestCosineRejectsNonFiniteValues(t *testing.T) {
+	for _, value := range []float32{float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1))} {
+		if _, err := Cosine([]float32{value, 1}, []float32{1, 1}); err == nil {
+			t.Fatalf("accepted non-finite value %v", value)
+		}
+	}
 }
 
-func TestCosineHandlesLargeFiniteValues(t *testing.T){
-	value:=float32(math.MaxFloat32);similarity,err:=Cosine([]float32{value,value},[]float32{value,value});if err!=nil{t.Fatal(err)};if math.Abs(similarity-1)>1e-12{t.Fatalf("similarity=%v",similarity)}
+func TestCosineHandlesLargeFiniteValues(t *testing.T) {
+	value := float32(math.MaxFloat32)
+	similarity, err := Cosine([]float32{value, value}, []float32{value, value})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(similarity-1) > 1e-12 {
+		t.Fatalf("similarity=%v", similarity)
+	}
 }
 
-func TestProjectionCancellation(t *testing.T) {
+func TestE5Cancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := (Projection{}).Embed(ctx, []string{"text"}); err == nil {
+	if _, err := (E5{}).Embed(ctx, []string{"text"}); err == nil {
 		t.Fatal("expected cancellation")
 	}
 }
