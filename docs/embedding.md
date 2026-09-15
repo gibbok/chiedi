@@ -34,7 +34,9 @@ Upgrades stage a new executable and matching assets, then atomically switch the
 link. Running processes keep their old release. Previous releases are retained;
 remove unused release directories only after their processes have stopped.
 The first upgrade also retains files from the previous flat installation layout.
-Override the installation root with `PREFIX` (absolute or relative).
+Override the installation root with `PREFIX` (absolute or relative). Published
+release files are readable and directories traversable by other users; access to
+a shared installation still depends on the permissions of its parent directories.
 `make build` prepares the same assets beside `bin/chiedi`.
 Keep `assets/` beside the executable when copying a build elsewhere.
 

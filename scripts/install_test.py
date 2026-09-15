@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -35,6 +36,22 @@ class InstallTests(unittest.TestCase):
         self.assertTrue(binary.is_file())
         self.assertTrue(Path(os.readlink(binary)).is_absolute())
         subprocess.run([str(binary), "0"], check=True)
+
+    def test_published_release_is_readable_in_shared_prefix(self):
+        # Even a private source must not leave mktemp's 0700 release directory
+        # blocking readers of an otherwise shared installation prefix.
+        self.source.chmod(0o700)
+        (self.source / "chiedi").chmod(0o700)
+        (self.source / "assets").chmod(0o700)
+        (self.source / "assets/manifest.json").chmod(0o600)
+        result = self.install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        binary = (self.prefix / "bin/chiedi").resolve()
+        for path in [binary.parent, binary, binary.parent / "assets"]:
+            mode = stat.S_IMODE(path.stat().st_mode)
+            self.assertEqual(mode & 0o055, 0o055, str(path))
+        manifest = binary.parent / "assets/manifest.json"
+        self.assertEqual(stat.S_IMODE(manifest.stat().st_mode) & 0o044, 0o044)
 
     def check_running_upgrade(self, legacy):
         if legacy:

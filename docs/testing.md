@@ -35,6 +35,7 @@ OCR acceptance coverage is skipped; other PDF regressions still run.
 
 | Target | Purpose |
 | --- | --- |
+| `make test-install` | Check relative/shared prefixes, running-process upgrades and failed-copy recovery without downloading models |
 | `make deps` | Verify cached modules against checksums |
 | `make test-unit` / `make test` | Run `go test ./...`, including compiled-binary tests; real OCR remains opt-in |
 | `make test-race` / `make race` | Run all default tests under the race detector |
@@ -54,6 +55,8 @@ The common binary scenario already runs under ordinary `go test ./...` unless
 
 ## What the tests cover
 
+- **Installation:** relative paths with spaces, published release permissions, upgrades
+  while current or legacy executables run, and preservation after failed asset copies.
 - **Indexing:** unchanged files, single-chunk edits, rename reuse, deletion,
   metadata-only changes, unavailable roots, incomplete scans, and symlink containment.
 - **Storage:** rollback, concurrent writers, schema migration, vector dimensions

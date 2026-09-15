@@ -19,6 +19,9 @@ cleanup() {
 trap cleanup EXIT
 cp "$source_dir/chiedi" "$release/chiedi"
 cp -R "$source_dir/assets" "$release/assets"
+# mktemp creates mode 0700; published program assets must be usable by readers
+# of a shared installation prefix. Parent-directory permissions remain unchanged.
+chmod -R a+rX "$release"
 link_dir="$(mktemp -d "$prefix/bin/.chiedi-link.XXXXXXXX")"
 ln -s "$release/chiedi" "$link_dir/chiedi"
 # Reject directories so mv cannot accidentally place the link inside one.

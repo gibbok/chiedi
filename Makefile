@@ -28,6 +28,7 @@ help: ## Show the available developer commands
 	  '  make benchmark    Measure personal-use search performance (opt-in)' \
 	  '  make demo         Build and run a readable local walkthrough' \
 	  '  make test-all     Run every automated verification layer' \
+	  '  make test-install Check installation upgrades and path handling' \
 	  '  make test-e2e     Run the real-binary functional acceptance test' \
 	  '  make test-unit    Run all Go tests once' \
 	  '  make test-race    Run all tests with the race detector' \
