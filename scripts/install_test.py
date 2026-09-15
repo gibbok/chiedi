@@ -17,7 +17,7 @@ class InstallTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.source = self.root / "source"
         (self.source / "assets").mkdir(parents=True)
-        shutil.copy2(shutil.which("sleep"), self.source / "chiedi")
+        shutil.copy(shutil.which("sleep"), self.source / "chiedi")
         (self.source / "assets/manifest.json").write_text('{"version": 1}')
         self.prefix = self.root / "installed"
 
