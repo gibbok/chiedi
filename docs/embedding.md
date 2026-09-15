@@ -29,7 +29,12 @@ No Rust compiler is required. Model/tokenizer/runtime checksums are recorded in
 the installed manifest and verified before loading the model.
 
 `make install` installs the complete application under `~/.local/lib/chiedi`
-and links `~/.local/bin/chiedi`. Override the installation root with `PREFIX`.
+and links `~/.local/bin/chiedi` to a complete release under `releases/`.
+Upgrades stage a new executable and matching assets, then atomically switch the
+link. Running processes keep their old release. Previous releases are retained;
+remove unused release directories only after their processes have stopped.
+The first upgrade also retains files from the previous flat installation layout.
+Override the installation root with `PREFIX` (absolute or relative).
 `make build` prepares the same assets beside `bin/chiedi`.
 Keep `assets/` beside the executable when copying a build elsewhere.
 

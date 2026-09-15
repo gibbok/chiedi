@@ -71,7 +71,13 @@ test-repeat: setup ## Repeat the state-sensitive packages to expose flakes
 test-e2e: setup ## Run the real compiled binary through the acceptance scenario
 	CHIEDI_E2E=1 go test -p 1 -v -count=1 ./internal/e2e
 
+test-install: ## Check installation upgrades and path handling
+	python3 scripts/install_test.py
+
+.PHONY: test-install
+
 test-all: ## Run dependency, unit, race, vet, build, repeat, and E2E checks
+	$(MAKE) test-install
 	$(MAKE) deps
 	$(MAKE) test-unit
 	$(MAKE) test-race
