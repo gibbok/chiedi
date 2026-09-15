@@ -8,7 +8,7 @@ change. Tests exercise local extraction, storage, retrieval, CLI, and MCP behavi
 ## Setup and contribution workflow
 
 - Go 1.25+, GNU Make, and Bash; initial module downloads may need network access.
-- Production embeddings require cgo and a C/C++ compiler. Python 3 prepares build
+- Production embeddings require cgo and a C/C++ compiler. The Go setup command prepares build
   assets; see [native installation](embedding.md).
 - Install Tesseract with English data for real OCR acceptance tests.
 - Follow [AGENTS.md](../AGENTS.md): preserve local processing, provenance, atomic

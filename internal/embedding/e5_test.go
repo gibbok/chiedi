@@ -174,7 +174,7 @@ func BenchmarkE5Query(b *testing.B) {
 func TestE5MatchesIndependentReference(t *testing.T) {
 	path := os.Getenv("CHIEDI_E5_REFERENCE")
 	if path == "" {
-		t.Skip("CI supplies the independent Python ONNX/tokenizer reference")
+		path = "testdata/e5-reference.json"
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {

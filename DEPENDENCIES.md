@@ -11,15 +11,11 @@ Native embedding dependencies (pinned in `scripts/native-assets.json`):
 - `intfloat/multilingual-e5-small`, revision `ccc66d3`, MIT: INT8 ONNX weights and tokenizer. Replaces the curated English projection. About 118 MB of model weights, plus tokenizer/runtime. Tokenizer truncation/padding is disabled at build time; Chiedi supplies complete windows.
 - `microsoft/onnxruntime 1.23.2`, MIT with third-party notices: CPU inference through its versioned C API, loaded from the installed asset directory. The C API header is extracted into ignored build output; no additional Go module wrapper is needed.
 - `daulet/tokenizers 1.27.0`, Apache-2.0: native static tokenizer library and vendored C ABI declarations in `internal/embedding/tokenizers.h`. Uses Hugging Face tokenizers; preserves the pretrained tokenizer's vocabulary, normalization, and segmentation. Prebuilt static archives avoid a Rust compiler requirement.
-- Build-only Python 3 standard library: pinned asset download, checksum validation and packaging preparation. Python is not invoked by the installed application.
-- Optional build-time `curl`: secure fallback when Python cannot read the host OS certificate store while downloading pinned assets. TLS verification remains enabled and downloaded files are still checksum-validated.
+- Build setup uses the Go standard library for HTTPS downloads, checksum validation and archive preparation.
 
 Native archive SHA-256 values come from upstream release metadata. Setup records
 model/tokenizer/runtime checksums for load-time integrity checks. Bundles carry
 the native runtime's license/third-party notices and the model/tokenizer licenses.
 See [installation](docs/embedding.md).
 
-CI-only numerical reference: NumPy 2.2.6, ONNX Runtime Python 1.23.2, and
-Hugging Face tokenizers Python 0.22.2, installed into an isolated virtual environment.
-These validate the native tokenizer/pooling pipeline; they are not application
-or source-build dependencies.
+The checked-in numerical reference fixture was generated independently with NumPy 2.2.6, ONNX Runtime 1.23.2 and Hugging Face tokenizers 0.22.2. Running the tests requires only Go and the native assets; no Python installation is needed. See `internal/embedding/testdata/README.md` for provenance.

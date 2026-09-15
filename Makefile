@@ -7,7 +7,7 @@ export CHIEDI_ASSETS := $(abspath bin/assets)
 
 .PHONY: setup install package
 setup: ## Fetch pinned model, tokenizer and native libraries (build-time only)
-	python3 scripts/setup.py
+	go run ./scripts/setup
 
 install: build ## Install executable and assets under ~/.local (override PREFIX)
 	bash scripts/install.sh
@@ -73,8 +73,7 @@ test-e2e: setup ## Run the real compiled binary through the acceptance scenario
 	CHIEDI_E2E=1 go test -p 1 -v -count=1 ./internal/e2e
 
 test-install: ## Check installation upgrades and path handling
-	python3 scripts/install_test.py
-	python3 scripts/setup_test.py
+	go test ./scripts/...
 
 .PHONY: test-install
 
@@ -103,3 +102,4 @@ BENCHMARK_REPEATS ?= 30
 benchmark: setup ## Explicitly run the personal-use search benchmark (never part of verify)
 	go test -p 1 -tags benchmark -count=1 ./benchmarks/search
 	go run -tags benchmark ./benchmarks/search -sizes '$(BENCHMARK_SIZES)' -repeats '$(BENCHMARK_REPEATS)'
+
