@@ -1,0 +1,72 @@
+name: benchmark
+
+on:
+  push:
+    paths:
+      - "internal/**"
+      - "benchmarks/**"
+      - "scripts/setup/**"
+      - "scripts/native-assets.json"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/benchmarks.yml"
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    paths:
+      - "internal/**"
+      - "benchmarks/**"
+      - "scripts/setup/**"
+      - "scripts/native-assets.json"
+      - "go.mod"
+      - "go.sum"
+      - "Makefile"
+      - ".github/workflows/benchmarks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      CHIEDI_ASSETS: ${{ github.workspace }}/bin/assets
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - name: Restore native E5 downloads and assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            .deps/downloads
+            bin/assets
+          key: e5-assets-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/native-assets.json', 'scripts/setup/main.go') }}
+      - name: Prepare native E5 assets
+        run: make setup
+      - name: Measure E5 and retrieval performance
+        run: |
+          go test -run '^$' -bench BenchmarkE5Query -benchtime=3x ./internal/embedding
+          make benchmark BENCHMARK_SIZES=20 BENCHMARK_REPEATS=1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e5-benchmark-${{ matrix.os }}
+          path: |
+            benchmarks/output/**/*.md
+            benchmarks/output/**/quality-results.json
+            benchmarks/output/**/ground-truth.json
+          retention-days: 2
