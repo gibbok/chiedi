@@ -2,6 +2,7 @@ name: benchmark
 
 on:
   push:
+    branches: [main]
     paths:
       - "internal/**"
       - "benchmarks/**"
@@ -25,7 +26,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: benchmark-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
