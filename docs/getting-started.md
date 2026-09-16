@@ -9,7 +9,7 @@ builds its own index without changing your source documents.
 
 - Requires Go 1.25 or newer. The first build may download Go modules.
 - GNU Make and Bash are used by the developer commands and demo.
-- Native embeddings require a C/C++ compiler and Python 3 at build time. Run
+- Native embeddings require Go and a C/C++ compiler at build time. Run
   `make install` for a complete installation under `~/.local`, or `make build`
   for a local bundle. See [native installation](embedding.md).
 - Scanned PDFs additionally need local Tesseract and language data.

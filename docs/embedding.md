@@ -11,12 +11,10 @@ server, cloud account, or network access is needed by an installed application.
 Build natively on Linux (glibc) or macOS, on amd64 or arm64. Windows, musl Linux,
 cross compilation and `CGO_ENABLED=0` builds are not configured.
 
-Source builds require Go 1.25+, a C/C++ compiler, Python 3, GNU Make and Bash.
+Source builds require Go 1.25+, a C/C++ compiler, GNU Make and Bash.
 On macOS install the Xcode Command Line Tools; on Debian/Ubuntu install
-`build-essential python3 make` alongside Go.
-`curl` is recommended when Python does not have access to the operating system
-certificate store; setup uses it as a secure HTTPS fallback and still verifies
-every pinned checksum.
+`build-essential make` alongside Go.
+Setup uses Go’s standard library and the operating system certificate store for HTTPS downloads, and verifies pinned checksums.
 
 ```sh
 make install
@@ -94,10 +92,10 @@ Tests use the actual bundled model and never download from inside test code.
 
 Embedding coverage includes cross-language queries, relevance against distractors,
 normalized finite output, full token-window coverage, long tails, concurrency,
-cancellation and corrupt assets. CI also compares native vectors against an
-independent Python tokenizer/ONNX mean-pooling reference for five multilingual
-query/passage inputs. Reference dependencies are isolated in a CI virtual
-environment and are not installed with Chiedi. Benchmarks use the production E5 paths, report
+cancellation and corrupt assets. Tests also compare native vectors against a
+separate Go/C tokenizer/ONNX mean-pooling reference for five multilingual
+query/passage inputs. No Python is required to run setup or tests.
+Benchmarks use the production E5 paths, report
 cold initialization separately, and measure English, Italian-to-English and
 Czech-to-English retrieval quality. Run:
 
