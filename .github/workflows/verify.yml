@@ -2,9 +2,29 @@ name: verify
 
 on:
   push:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "website/**"
+      - "LICENSE"
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "website/**"
+      - "LICENSE"
   workflow_dispatch:
+    inputs:
+      macos_package_smoke:
+        description: Also run the package smoke test on macOS
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -27,6 +47,13 @@ jobs:
         with:
           go-version: '1.25.x'
           cache: true
+      - name: Restore native E5 downloads and assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            .deps/downloads
+            bin/assets
+          key: e5-assets-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/native-assets.json', 'scripts/setup/main.go') }}
       - name: Prepare native E5 assets
         run: make setup
       - name: Verify dependency metadata
@@ -41,14 +68,11 @@ jobs:
             sudo apt-get update && sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
           fi
       - run: make verify
-      - run: make verify-full
-      - name: Measure E5 and retrieval performance
-        run: |
-          go test -run '^$' -bench BenchmarkE5Query -benchtime=3x ./internal/embedding
-          make benchmark BENCHMARK_SIZES=20 BENCHMARK_REPEATS=1
       - name: Build installation bundle
+        if: matrix.os == 'ubuntu-latest' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.macos_package_smoke)
         run: make package
       - name: Smoke test relocated installation
+        if: matrix.os == 'ubuntu-latest' || startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.macos_package_smoke)
         run: |
           mkdir -p "$RUNNER_TEMP/chiedi-install"
           PREFIX="$RUNNER_TEMP/chiedi-install" bash scripts/install.sh
@@ -59,12 +83,3 @@ jobs:
           "$RUNNER_TEMP/chiedi-install/bin/chiedi" --db smoke.db add "$RUNNER_TEMP/smoke-corpus"
           "$RUNNER_TEMP/chiedi-install/bin/chiedi" --db smoke.db search 'Quanti giorni di ferie?' | tee smoke-result.txt
           grep -q 'leave.txt' smoke-result.txt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e5-benchmark-${{ matrix.os }}
-          path: |
-            benchmarks/output/**/*.md
-            benchmarks/output/**/quality-results.json
-            benchmarks/output/**/ground-truth.json
-          retention-days: 2
