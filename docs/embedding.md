@@ -6,6 +6,26 @@ directly through cgo. The Hugging Face tokenizer is linked into the executable
 through the daulet/tokenizers 1.27.0 C ABI. No Python, Rust compiler, model
 server, cloud account, or network access is needed by an installed application.
 
+## How text becomes searchable
+
+An embedding is a list of numbers representing learned features of text. E5 maps
+questions and passages into the same 384-dimensional space, so related wording
+can be close even across languages. Chiedi uses the pretrained model as-is; indexing
+your documents does not train it.
+
+1. Build a passage from the document title, section heading, and chunk text, then
+   add `passage: `. Questions receive `query: ` instead.
+2. The tokenizer converts text into token IDs (tokens can be words or word parts).
+   The model produces a vector for each token. **Mean pooling** averages those
+   vectors; **L2 normalization** scales the result to unit length for comparison.
+3. Store one vector per chunk alongside its source text. At search time, embed
+   the question and compare it with stored vectors using cosine distance.
+
+Document vectors are reused when their embedding inputs are unchanged; each
+search computes a query vector. The model's token windows are an internal step:
+even a chunk requiring several windows still produces one stored vector and one
+retrieval result. See [search ranking](retrieval.md) and [reuse](indexing.md).
+
 ## Build and install
 
 Build natively on Linux (glibc) or macOS, on amd64 or arm64. Windows, musl Linux,
@@ -50,7 +70,7 @@ An explicit `CHIEDI_ASSETS=/absolute/path` overrides asset discovery, mainly for
 development. Normal installations need no environment configuration. The
 executable resolves symlinks and never loads libraries from the current directory.
 
-## Retrieval behavior
+## Model details
 
 - Query inputs use `query: `; passage inputs use `passage: `, in every language.
 - Original query wording reaches E5, including punctuation and stopwords.
@@ -107,3 +127,8 @@ CHIEDI_ASSETS="$PWD/bin/assets" go test -run '^$' -bench BenchmarkE5Query ./inte
 Model file size is not peak RAM usage. CPU, text length, process startup, PDF
 conversion and inference all affect observed performance. MCP amortizes model
 loading over many queries in one process.
+
+Implementation: [model identity and tasks](../internal/embedding/embedding.go),
+[token windows and aggregation](../internal/embedding/native.go),
+[native inference and pooling](../internal/embedding/native.c),
+[asset setup](../scripts/setup/main.go).

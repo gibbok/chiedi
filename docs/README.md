@@ -9,7 +9,8 @@ and operational details.
 | [Getting started and CLI](getting-started.md) | Build, select a database, manage roots, search, and configure the process |
 | [Architecture](architecture.md) | Runtime boundaries, package responsibilities, and extension points |
 | [Indexing and chunking](indexing.md) | Change detection, extraction, provenance, and embedding reuse |
-| [Retrieval algorithms](retrieval.md) | Multilingual E5 embeddings, BM25 candidates, cosine search, and reciprocal rank fusion |
+| [Embeddings and installation](embedding.md) | How text becomes vectors, local model inference, and native bundles |
+| [Retrieval algorithms](retrieval.md) | BM25 candidates, cosine search, and reciprocal rank fusion |
 | [PDF conversion](pdf-conversion.md) | Text extraction, scanned pages, OCR settings, and limits |
 | [MCP integration](mcp.md) | Transport, tool contracts, result shapes, and stale references |
 | [Storage and operations](storage.md) | Schema, transactions, failure diagnosis, privacy, and rebuilding |
