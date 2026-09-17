@@ -6,6 +6,17 @@ unchanged.
 
 [Documentation index](README.md)
 
+## When reconciliation runs
+
+`index` and `reconcile` explicitly refresh every registered root. CLI `search`
+and each valid MCP tool call do the same before reading results; CLI `status`
+only reads stored state. There is no background watcher or timer, so a disk edit
+reaches the index on the next refresh.
+
+Each refresh still walks the folders and checks metadata. An unchanged corpus
+avoids extraction and document embedding, but the walk takes time as the number
+of files grows. A search path filter narrows results, not this refresh work.
+
 ## File discovery and extraction
 
 - Recursively scan registered roots for `.txt`, `.md`, and `.pdf`, case-insensitively.
@@ -52,6 +63,17 @@ then by device/inode identity where the platform exposes it.
 A pure rename retains existing chunks and embeddings, including any filename
 context used when they were originally embedded. Re-extraction can change that
 context. Reused vectors do not imply reused chunk IDs on document replacement.
+
+For example, editing one Markdown section re-extracts that file, but only chunks
+whose text or title/heading context changed need new vectors. Changing a title
+can affect every chunk; adding a paragraph can change nearby chunk boundaries.
+Changing only the file's timestamp reads and hashes it, then skips extraction
+if its bytes are unchanged.
+
+Successful document updates remain committed if another file or root fails.
+CLI search and MCP stop on a reconciliation error rather than serving results
+from that partial refresh. Stored extraction failures are different: they remove
+that document's searchable chunks but do not by themselves fail the whole run.
 
 ## Chunking algorithm
 

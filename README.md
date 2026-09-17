@@ -23,7 +23,9 @@ Built in Go, with SQLite FTS5, exact vector search, and bundled multilingual E5 
 
 Chiedi retrieves evidence; the connected assistant decides how to use it. Its
 embeddings use intfloat/multilingual-e5-small locally through ONNX Runtime's C API.
-Retrieval quality varies by language and document; no document leaves your computer.
+Retrieval quality varies by language and document. Chiedi processes documents
+locally; an MCP client receives retrieved text and controls whether it sends that
+text to a remote model.
 
 ## Get started
 

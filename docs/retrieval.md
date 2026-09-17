@@ -4,6 +4,13 @@ Hybrid retrieval combines two useful signals: words that match the question and
 passages with similar learned embeddings. It returns ranked source chunks, not a
 generated answer or a calibrated confidence score.
 
+Keyword search is useful for names and identifiers; semantic search can find
+related passages without the same words. Hybrid search gives a chunk credit for
+its position in each list, with an extra contribution when both methods find it.
+For example, `vacation policy` requires both terms in the lexical channel, while
+E5 can also retrieve a passage about paid leave. This is a similarity match, not
+a guarantee that the passage answers the question.
+
 [Documentation index](README.md)
 
 ## Query to evidence
@@ -27,6 +34,11 @@ flowchart TD
 - Fuse ranks and return the requested number of chunks: default 10, maximum 50.
   Several chunks can come from one document; production retrieval does not deduplicate documents.
 
+`--path-prefix` filters both candidate lists, but reconciliation still scans all
+registered roots. Increasing `--limit` changes only how many fused results are
+returned; it does not increase the 40-candidate budget per channel. CLI and MCP
+always use hybrid retrieval; isolated full-text/vector modes are benchmark paths.
+
 ## Multilingual E5 embeddings
 
 The production model is `intfloat/multilingual-e5-small`, pinned to revision
@@ -38,7 +50,9 @@ receive `passage: `. Each window has at most 512 tokens including prefix and
 special tokens. Mean pooling includes every unpadded token; vectors are
 L2-normalized. Longer text is covered by contiguous windows and their normalized
 vectors are averaged with content-token-count weights, then normalized again.
-No source text is truncated or rewritten. See [embedding and installation](embedding.md).
+All content tokens are covered; embedded NUL characters become spaces before
+tokenization. See [embedding and installation](embedding.md) for a plain-language
+explanation of pooling, normalization, and stored vectors.
 
 There is no curated synonym dictionary, suffix stripping or English stopword
 filter. Empty/whitespace input gives a zero vector. Learned similarity depends

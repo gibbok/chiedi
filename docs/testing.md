@@ -26,10 +26,12 @@ CHIEDI_TEST_OCR=1 make verify
 CHIEDI_TEST_OCR=1 make verify-full
 ```
 
-Both are aliases for `test-all` and execute the same full sequence. CI runs both
-with OCR required, checks that `go mod tidy` leaves dependency files unchanged,
-and checks a relocated native installation. Without `CHIEDI_TEST_OCR=1`, real
-OCR acceptance coverage is skipped; other PDF regressions still run.
+Both are aliases for `test-all` and execute the same full sequence. CI runs
+`make verify` once per platform with OCR required and checks that `go mod tidy`
+leaves dependency files unchanged. Packaging and relocated-installation checks
+run on Linux, and on macOS for tags or an explicit manual option. Without
+`CHIEDI_TEST_OCR=1`, real OCR acceptance coverage is skipped; other PDF regressions
+still run.
 
 ## Verification targets
 
@@ -112,8 +114,8 @@ Make prepares pinned assets and sets `CHIEDI_ASSETS` for tests and their CLI/MCP
 subprocesses. For direct `go test`, run `make setup` first and export
 `CHIEDI_ASSETS="$PWD/bin/assets"`. No tests fetch model assets themselves.
 
-The native C build replaces the former pure-Go build check. CI runs both full
-verification targets on Linux x64 and macOS ARM, then benchmarks E5, packages
-the application, and tests installation/symlink asset discovery from another
-working directory. Package parallelism is limited to one for predictable native
-model/PDF memory use; race detection and all existing checks remain enabled.
+CI verifies Linux x64 and macOS ARM; a separate workflow benchmarks E5 and
+retrieval on both. Draft PRs and documentation-only changes do not trigger these
+jobs. The installation smoke test checks symlink asset discovery from another
+working directory. Go test package parallelism is limited to one for predictable
+native model/PDF memory use; race detection remains enabled.
